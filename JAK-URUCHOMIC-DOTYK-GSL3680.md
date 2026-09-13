@@ -135,8 +135,8 @@ if (Finger_num > MAX_FINGER_NUM) {
 ```
 
 Tę samą klamrę powtórzono po `gsl_alg_id_main()` (druga kopia `Finger_num`).
-Dokładne linie: `esp_lcd_touch_gsl3680.c` — bufor linia 310, odczyt 44 B linia
-323, klamry linie 325–328 i 361–362.
+Dokładne linie (w tej kopii repozytorium): `esp_lcd_touch_gsl3680.c` — bufor
+linia 317, odczyt 44 B linia 346, klamry linie 348 i 417.
 
 ### 2.6 `get_xy` — mostek do portu LVGL
 
@@ -187,7 +187,7 @@ const i2c_master_bus_config_t i2c_cfg = {
     .scl_io_num = GPIO_NUM_8,
     .clk_source = I2C_CLK_SRC_DEFAULT,
     .glitch_ignore_cnt = 7,
-    .flags.enable_internal_pullup = false,   // zewnętrzne pull-upy, bez wewnętrznych
+    .flags.enable_internal_pullup = true,    // ← KLUCZOWE (patrz niżej)
 };
 i2c_new_master_bus(&i2c_cfg, &s_i2c_bus);
 ```
@@ -195,14 +195,28 @@ i2c_new_master_bus(&i2c_cfg, &s_i2c_bus);
 Uwaga: **I2C_NUM_1 jest współdzielony** z kodekiem audio ES8311 —
 funkcja `jc8012_i2c_bus_get()` udostępnia ten sam uchwyt do `board_extras`.
 
+⚠️ **Wewnętrzne pull-upy I2C muszą być włączone** (`enable_internal_pullup =
+true`). Szyna I2C dotyku na tej płycie **opiera się na wewnętrznych
+pull-upach ESP32-P4** — bez nich odczyty stają się marginalne i sporadycznie
+skorumpowane (objaw: surowe próbki z absurdalnymi wartościami, np.
+`raw sense = 17226`). Wcześniejszy wpis w tym poradniku (`= false`) był
+błędny — kod produkcyjny ma `= true`.
+
 ### 3.3 Tworzenie uchwytu dotyku
 
 ```c
+// Selektor adresu I2C — bez tego driver loguje
+// "Unable to initialize the I2C address" (patrz 3.3.1).
+static const esp_lcd_touch_io_gsl3680_config_t s_gsl3680_io_cfg = {
+    .dev_addr = ESP_LCD_TOUCH_IO_I2C_GSL3680_ADDRESS,   // 0x40
+};
+
 const esp_lcd_touch_config_t tp_cfg = {
     .x_max = 800,
     .y_max = 1280,
     .rst_gpio_num = GPIO_NUM_22,
     .int_gpio_num = GPIO_NUM_21,
+    .driver_data = &s_gsl3680_io_cfg,   // ← KLUCZOWE (wybór adresu I2C)
     .levels = { .reset = 0, .interrupt = 0 },
     .flags = {
         .swap_xy  = 0,
@@ -216,6 +230,29 @@ tp_io_config.scl_speed_hz = 400000;
 esp_lcd_new_panel_io_i2c(s_i2c_bus, &tp_io_config, &tp_io_handle);
 esp_lcd_touch_new_i2c_gsl3680(tp_io_handle, &tp_cfg, &s_touch_handle);
 ```
+
+### 3.3.1 ⚠️ KRYTYCZNA POPRAWKA #3 — wybór adresu I2C
+
+Driver GSL3680 wybiera adres I2C kontrolera (0x40) **pinem INT/A0**: w trakcie
+resetu wystawia INT=0, podnosi RST i dopiero wtedy rozmawia po I2C. Żeby to
+zrobić, musi mieć **wszystkie trzy** rzeczy naraz:
+
+1. `rst_gpio_num` ≠ `GPIO_NUM_NC` (tu **GPIO22**),
+2. `int_gpio_num` ≠ `GPIO_NUM_NC` (tu **GPIO21**),
+3. `driver_data` wskazujący na `esp_lcd_touch_io_gsl3680_config_t` z
+   `dev_addr = ESP_LCD_TOUCH_IO_I2C_GSL3680_ADDRESS` (**0x40**).
+
+Gdy którejkolwiek brakuje, driver wpada w gałąź awaryjną i loguje:
+
+```
+W gsl3680: Unable to initialize the I2C address
+```
+
+a potem robi tylko zwykły reset bez wyboru adresu. Dotyk najczęściej i tak
+wystartuje (po resecie GSL3680 domyślnie odpowiada pod 0x40), dlatego
+ostrzeżenie łatwo zignorować — ale to objaw **brakującej konfiguracji adresu**.
+Poprawka: `.driver_data = &s_gsl3680_io_cfg` + ustawione RST i INT. Po poprawce
+ostrzeżenie znika — wymaga **ponownego zbudowania i wgrania firmware**.
 
 ### 3.4 Wymuszenie ustawienia osi (po utworzeniu)
 
@@ -243,7 +280,7 @@ const lvgl_port_touch_cfg_t touch_cfg = {
 s_touch_indev = lvgl_port_add_touch(&touch_cfg);
 ```
 
-### 3.6 Polling
+### 3.6 Polling — tryb TIMER (nie EVENT)
 
 ```c
 lv_indev_set_mode(indev, LV_INDEV_MODE_TIMER);      // polling timerem
@@ -251,6 +288,14 @@ lv_timer_t *t = lv_indev_get_read_timer(indev);
 lv_timer_set_period(t, 10);                          // co 10 ms
 lv_timer_ready(t);
 ```
+
+⚠️ **Dlaczego TIMER, a nie EVENT (przerwanie INT na GPIO21):** tryb EVENT
+(sterowany przerwaniem) był testowany, żeby zmniejszyć opóźnienie dotyku, ale
+na tej płycie **linia INT GSL3680 nie wyzwala się niezawodnie**. W trybie EVENT
+LVGL trzyma timer odczytu wstrzymany i czeka na przerwanie — skoro INT nie
+przychodzi, LVGL **nigdy nie odczytuje dotyku** i ekran jest kompletnie martwy.
+TIMER + 10 ms to konfiguracja sprawdzona i stabilna (identyczna jak w panelach
+Waveshare z tego samego portu).
 
 ### 3.7 Retry init
 
@@ -337,6 +382,40 @@ Spójność zapewnia LVGL 9:
 - ekran: logiczny 1280×800 → (270°) → bufor natywny 800×1280,
 - dotyk: natywny 800×1280 → (`rotate_point` 270°) → logiczny 1280×800.
 
+### 6.1 Co dokładnie trzeba zrobić po stronie LVGL (checklista)
+
+Żeby dotyk był **aktywny i poprawnie wyświetlony**, po stronie LVGL muszą być
+spełnione cztery rzeczy — jeśli którejś brakuje, dotyk nie działa albo jest
+przesunięty/obrócony:
+
+1. **Ekran LVGL na tym samym wyświetlaczu co dotyk.** W
+   `display_init_panel10jc.c` ekran tworzy `lvgl_port_add_disp_dsi(...)`, a
+   dotyk wiąże się z nim przez `.disp = lv_display_get_default()` w
+   `touch_init_panel10jc.c`.
+
+2. **Rotacja LVGL 270°** — `lv_display_set_rotation(s_lv_display, LV_DISPLAY_ROTATION_270)`.
+   To obraca **zarówno treść ekranu, jak i punkty dotyku** tą samą konwencją
+   LVGL. Bez tego krajobraz 1280×800 leżałby na boku, a dotyk działałby po
+   przekątnej.
+
+3. **Rotacja programowa (`sw_rotate = true`)** w `lvgl_port_display_cfg_t.flags`.
+   Panel JD9365 jest natywnie 800×1280 (portret), więc LVGL renderuje w
+   krajobrazie, a bufor obraca w callbacku flush (`lv_draw_sw_rotate`).
+   Uwaga: przy `sw_rotate=true` pole `.rotation {mirror_x, mirror_y}` ekranu
+   **nie trafia do sprzętu** — dlatego lustra ustawia się wyłącznie po stronie
+   dotyku (sekcja 5).
+
+4. **Indev dotyku zarejestrowany i odpytujący** — `lvgl_port_add_touch()` +
+   `lv_indev_set_mode(LV_INDEV_MODE_TIMER)` + timer 10 ms + `lv_timer_ready()`.
+   To mostek `esp_lcd_touch` → LVGL; bez niego LVGL w ogóle nie wie, że
+   istnieje ekran dotykowy.
+
+Dodatkowo w `touch_init_panel10jc.c` indev ma podpięte callbacki
+`LV_EVENT_PRESSED` / `LV_EVENT_PRESSING` (`touch_activity_event_cb`), które:
+- budzą ekran (`display_note_activity()` — reset timera wygaszacza / przyciemniania),
+- po włączeniu debugu rysują czerwoną kropkę pod palcem (overlay diagnostyczny),
+- zapisują surowe próbki do `/sdcard/panel/touch.csv` (rejestrator `data_log_touch`).
+
 ---
 
 ## 7. Budowanie i wgrywanie
@@ -406,7 +485,9 @@ podąża za palcem.
 | Bootloop `Store access fault` przy starcie dotyku | bufor `touch_data` < 44 B | `uint8_t touch_data[44]` + klamra `Finger_num` |
 | Dotyk „do góry nogami" / po przekątnej | złe lustra osi | `mirror_x=1`, `mirror_y=0`, `swap_xy=0` |
 | `gsl3680 startup failed after 10 retries` | kontroler nie wystartował (brak 0x5a5a5a5a w 0xb0) | sprawdź zasilanie/RST GPIO22, pull-upy I2C, adres 0x40, clock ≤400 kHz |
-| `Unable to initialize the I2C address` | brak komunikacji I2C | sprawdź SCL=GPIO8, SDA=GPIO7, zewnętrzne pull-upy, czy I2C_NUM_1 nie jest używane gdzie indziej |
+| `Unable to initialize the I2C address` | brak `driver_data` (wybór adresu I2C) lub brak RST/INT GPIO | dodaj `.driver_data = &s_gsl3680_io_cfg` (0x40) i ustaw `rst_gpio_num`/`int_gpio_num` |
+| Odczyty dotyku zaszumione / absurdalne wartości (`raw sense = 17226`) | brak wewnętrznych pull-upów I2C | `enable_internal_pullup = true` w konfiguracji magistrali I2C |
+| Dotyk martwy po przełączeniu na tryb EVENT/INT | linia INT GSL3680 nie wyzwala się na tej płycie | wróć do `LV_INDEV_MODE_TIMER` + 10 ms |
 | Kafelek reaguje, ale przesunięty o stały wektor | offset/scale | skoryguj `x_max/y_max` lub `scale` w `lvgl_port_touch_cfg_t` |
 | Dotyk wcale nie reaguje (ale ekran działa) | `lvgl_port_add_touch` nie podpięty / polling | sprawdź log `Touch initialized`, `lv_indev_set_mode(TIMER)` |
 
@@ -419,6 +500,11 @@ podąża za palcem.
 2. **Dodano klamrę `Finger_num ≤ 3`** — bezpieczeństwo pętli parsujących.
 3. **Ustawiono poprawne lustra osi** (`mirror_x=1`, `mirror_y=0`, `swap=0`)
    — usunęło odwrócenie dotyku o 180°.
-4. **Podpięto driver do LVGL** przez `lvgl_port_add_touch` (scale 1:1,
-   polling 10 ms, timer).
-5. **Zweryfikowano** w logu start kontrolera (`0x5a5a5a5a`) i test fizyczny.
+4. **Wybrano adres I2C** przez `.driver_data` (0x40) + RST/INT — usunęło
+   ostrzeżenie „Unable to initialize the I2C address".
+5. **Włączono wewnętrzne pull-upy I2C** — ustabilizowało odczyty dotyku.
+6. **Ustawiono tryb TIMER + 10 ms** (nie EVENT) — linia INT na tej płycie
+   nie wyzwala się niezawodnie, więc polling timerem jest jedynym pewnym trybem.
+7. **Podpięto driver do LVGL** przez `lvgl_port_add_touch` (scale 1:1),
+   z rotacją 270° spójną z ekranem.
+8. **Zweryfikowano** w logu start kontrolera (`0x5a5a5a5a`) i test fizyczny.

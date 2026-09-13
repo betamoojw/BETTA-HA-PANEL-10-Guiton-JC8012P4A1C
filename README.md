@@ -149,6 +149,8 @@ Build artifacts land in `build-panel10jc/`; factory/OTA images land in `release/
 | `tools/`                       | `make_factory_bin.ps1` — image packaging helper                                    |
 | `images/`                      | Screenshots, logo and example photos used by this README                            |
 
+> **Documentation / Dokumentacja:** [`DOKUMENTACJA.md`](DOKUMENTACJA.md) — pełna instrukcja (PL/EN) · [`JAK-URUCHOMIC-DOTYK-GSL3680.md`](JAK-URUCHOMIC-DOTYK-GSL3680.md) — uruchomienie dotyku Guiton krok po kroku · [`ANALIZA-NAPRAWA-DOTYKU.md`](ANALIZA-NAPRAWA-DOTYKU.md) — analiza bootloop + naprawa dotyku · [`release-notes.md`](release-notes.md) — historia zmian
+
 ---
 
 ## ⚙️ Web editor — settings reference / Edytor WWW — ustawienia
