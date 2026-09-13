@@ -1,0 +1,35 @@
+menu "JC8012P4A1C Board Support (local shim)"
+
+    config BSP_LCD_DPI_BUFFER_NUMS
+        int "Number of MIPI-DSI frame buffers"
+        default 2
+        range 1 3
+        help
+            Number of frame buffers used by the JD9365 MIPI-DSI panel driver.
+            The JC8012P4A1C display driver reads this value when creating the
+            DPI panel configuration.
+
+    config BSP_DISPLAY_LVGL_AVOID_TEAR
+        bool "Avoid tearing effect"
+        default y
+        help
+            Compatibility symbol for the shared sdkconfig.defaults overlay.
+            Note: the JC8012P4A1C panel driver runs LVGL with software
+            rotation (270 degrees), so avoid-tearing/direct mode is not
+            actually used at runtime.
+
+    choice BSP_DISPLAY_LVGL_MODE
+        prompt "Select LVGL buffer mode"
+        default BSP_DISPLAY_LVGL_DIRECT_MODE
+        help
+            Compatibility choice for the shared sdkconfig.defaults overlay.
+
+        config BSP_DISPLAY_LVGL_FULL_REFRESH
+            bool "Full refresh"
+
+        config BSP_DISPLAY_LVGL_DIRECT_MODE
+            bool "Direct mode"
+
+    endchoice
+
+endmenu

@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: LicenseRef-FNCL-1.1
+# Copyright (c) 2026 Cpt_Kirk
+#
+# Manifest for the 10.1" 1280x800 Guition JC8012P4A1C panel variant.
+# Selected automatically by the top-level CMakeLists.txt based on the active
+# SDKCONFIG_DEFAULTS overlay. Do NOT edit main/idf_component.yml directly --
+# it is regenerated from this file on every configure.
+#
+# Unlike the Waveshare 10.1" variant there is no upstream ESP-BSP package:
+# the JD9365 panel and GSL3680 touch drivers are vendored locally under
+# components/, and esp_lvgl_port is added explicitly here (as for panel7).
+dependencies:
+  idf: ">=5.5"
+  espressif/esp_wifi_remote:
+    version: "*"
+    rules:
+      - if: "target in [esp32p4]"
+  lvgl/lvgl:
+    version: "^9"
+  espressif/esp_lvgl_port:
+    version: "^2.7.2"
+    rules:
+      - if: "target in [esp32p4]"
+  espressif/esp_lcd_touch:
+    version: "^1.2.0"
+    rules:
+      - if: "target in [esp32p4]"
+  joltwallet/littlefs:
+    version: "^1.20.2"
+  espressif/esp_hosted:
+    version: "2.11.7"
+    rules:
+      - if: "target in [esp32p4]"
+  espressif/esp_websocket_client:
+    version: "*"
+  # main/CMakeLists.txt references esp_codec_dev directly (xiaozhi audio path).
+  # The Waveshare BSPs provide it transitively; the JC panel has no BSP, so it
+  # must be declared explicitly here to keep the 1:1 application code building.
+  espressif/esp_codec_dev:
+    version: "~1.5"
+  # Opus audio codec used by the Xiaozhi voice client (mic capture encode +
+  # server TTS decode). Declared by the panel7 manifest; needed here too now
+  # that the JC panel enables Xiaozhi.
+  78/esp-opus:
+    version: "1.0.*"
+  # ESP Video framework (V4L2 MIPI-CSI device stack). The JC8012P4A1C has a
+  # built-in OV02C10 MIPI-CSI camera; its sensor driver is vendored under
+  # components/esp_cam_sensor (2.1.0, matching the official Guition demo), so
+  # esp_video's `esp_cam_sensor 2.*` dependency is satisfied locally.
+  espressif/esp_video:
+    version: "~2.0"
+    public: true
+    rules:
+      - if: "target in [esp32p4]"

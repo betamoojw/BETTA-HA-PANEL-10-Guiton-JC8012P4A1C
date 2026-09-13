@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-FNCL-1.1
+# Copyright (c) 2026 Cpt_Kirk
+.vscode/
+build/
+build_*/
+build-panel*/
+lvgl_design/
+sdkconfig
+sdkconfig.panel*
+sdkconfig.old
+
+# Internal merge / porting notes - never publish.
+portieren.md
+portieren-s3.md
+MERGE-PROTOCOL.md
+release/archive/
+release/ota/archive/
+main/ui/weather_icons/**
+!main/ui/weather_icons/
+!main/ui/weather_icons/UPSTREAM_LINK.txt
+
+# Panel variant manifest is generated from main/idf_component.panel{4,10}.yml
+# by the top-level CMakeLists.txt on every configure. Do not edit or commit.
+main/idf_component.yml

@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: LicenseRef-FNCL-1.1
+# Copyright (c) 2026 Cpt_Kirk
+#
+# Panel variant overlay: 10.1" 1280x800 (Guition JC8012P4A1C).
+# Apply together with the common sdkconfig.defaults via
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.panel10jc" ...
+# or the CMake preset "panel10jc" (see CMakePresets.json).
+
+# --- Panel variant selector (drives app_config.h + display/touch init) ---
+# CONFIG_APP_PANEL_VARIANT_4INCH_720 is not set
+CONFIG_APP_PANEL_VARIANT_10INCH_JC=y
+
+# PSRAM profile (Hex 200MHz) and the shared display/LVGL tuning (including
+# CONFIG_BSP_LCD_DPI_BUFFER_NUMS etc.) live in sdkconfig.defaults.  The BSP_*
+# symbols are provided by the local components/jc8012_bsp Kconfig shim.
+
+# --- GSL3680 touch tuning ---
+CONFIG_ESP_LCD_TOUCH_MAX_POINTS=10
+
+# --- TCP receive pacing (STA TX DMA exhaustion fix) ---
+# Keep the same value as the common defaults; explicit here so any future
+# bump in sdkconfig.defaults cannot re-introduce the ACK flood on this panel.
+CONFIG_LWIP_TCP_WND_DEFAULT=4096
+
+# --- UI assets ---
+CONFIG_LV_USE_LODEPNG=y
+
+# --- FATFS: enable Long File Names ---
+# Tile background uploads use the original (often long) filename from the
+# browser, e.g. "screenshot_2025.png". With LFN disabled (the default) only
+# 8.3 names can be created and every such upload fails with
+# "Cannot open target file". Use heap-allocated LFN buffers so long names
+# work without growing every task stack.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+
+# --- 16MB BOYA flash + ESP32-P4 rev v1.x (this JC panel) ---
+# The common sdkconfig.defaults targets 32MB boards; the JC8012P4A1C has
+# 16MB flash and silicon revision v1.x, so override both here.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.16mb.csv"
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_100=y
+
+# --- Feature toggles for the JC panel ---
+# Xiaozhi voice assistant is enabled (ES8311 mono mic + speaker).
+# Remote camera store (web editor cameras page) is off; the JC panel has no
+# RTSP cameras.  The built-in MIPI-CSI camera is DISABLED (bootloop
+# workaround: the camera path overflowed the main task stack during
+# dashboard init).
+CONFIG_APP_FEATURE_CAMERAS=n
+CONFIG_APP_FEATURE_XIAOZHI=y
+CONFIG_APP_FEATURE_LOCAL_CAMERA=n
+
+# --- Built-in OV02C10 MIPI-CSI camera: disabled ---
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+CONFIG_CAMERA_OV02C10=n
+
+# --- ESP Video framework (V4L2 MIPI-CSI stack): disabled with the camera ---
+CONFIG_ESP_VIDEO_ENABLE_ISP=n
+CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=n
+CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=n
+CONFIG_ESP_VIDEO_ENABLE_DATA_PREPROCESSING=n
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=n
+CONFIG_ESP_VIDEO_DISABLE_MIPI_CSI_DRIVER_BACKUP_BUFFER=y
+CONFIG_ESP_VIDEO_ENABLE_SWAP_SHORT=n
+CONFIG_ESP_VIDEO_ENABLE_SWAP_BYTE=n

@@ -1,0 +1,803 @@
+/* SPDX-License-Identifier: LicenseRef-FNCL-1.1
+ * Copyright (c) 2026 Cpt_Kirk
+ *
+ * monitor_tile: composite server/PC monitoring tile.
+ * Primary entity is rendered as a gauge (arc / arc_semi / bar) or plain
+ * big number; an optional comma-separated list of sub_entity_ids renders
+ * as a compact stats grid underneath (temperature, power, fan, disk, ...).
+ */
+#include "ui/ui_widget_factory.h"
+
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "cJSON.h"
+
+#include "ui/fonts/app_text_fonts.h"
+#include "ui/ui_memory.h"
+#include "ui/theme/theme_default.h"
+
+#if LV_FONT_MONTSERRAT_24
+#define MONITOR_VALUE_FONT_SMALL APP_FONT_TEXT_24
+#elif LV_FONT_MONTSERRAT_22
+#define MONITOR_VALUE_FONT_SMALL APP_FONT_TEXT_22
+#elif LV_FONT_MONTSERRAT_20
+#define MONITOR_VALUE_FONT_SMALL APP_FONT_TEXT_20
+#else
+#define MONITOR_VALUE_FONT_SMALL APP_FONT_TEXT_20
+#endif
+
+#if LV_FONT_MONTSERRAT_44
+#define MONITOR_VALUE_FONT_LARGE (&lv_font_montserrat_44)
+#elif LV_FONT_MONTSERRAT_40
+#define MONITOR_VALUE_FONT_LARGE (&lv_font_montserrat_40)
+#elif LV_FONT_MONTSERRAT_36
+#define MONITOR_VALUE_FONT_LARGE (&lv_font_montserrat_36)
+#elif LV_FONT_MONTSERRAT_34
+#define MONITOR_VALUE_FONT_LARGE APP_FONT_TEXT_34
+#elif LV_FONT_MONTSERRAT_32
+#define MONITOR_VALUE_FONT_LARGE (&lv_font_montserrat_32)
+#else
+#define MONITOR_VALUE_FONT_LARGE MONITOR_VALUE_FONT_SMALL
+#endif
+
+#if LV_FONT_MONTSERRAT_32
+#define MONITOR_VALUE_FONT_MEDIUM (&lv_font_montserrat_32)
+#elif LV_FONT_MONTSERRAT_28
+#define MONITOR_VALUE_FONT_MEDIUM APP_FONT_TEXT_28
+#elif LV_FONT_MONTSERRAT_24
+#define MONITOR_VALUE_FONT_MEDIUM APP_FONT_TEXT_24
+#else
+#define MONITOR_VALUE_FONT_MEDIUM MONITOR_VALUE_FONT_SMALL
+#endif
+
+typedef enum {
+    MONITOR_STYLE_DEFAULT = 0,
+    MONITOR_STYLE_PERCENT,
+    MONITOR_STYLE_ARC,
+    MONITOR_STYLE_ARC_SEMI,
+    MONITOR_STYLE_GAUGE,
+    MONITOR_STYLE_BARS,
+} monitor_style_t;
+
+#define MONITOR_BAR_COUNT 8
+
+typedef enum {
+    MONITOR_OPENING_LEFT = 0,
+    MONITOR_OPENING_RIGHT,
+    MONITOR_OPENING_TOP,
+    MONITOR_OPENING_BOTTOM,
+} monitor_opening_t;
+
+typedef struct {
+    char entity_id[APP_MAX_ENTITY_ID_LEN];
+    lv_obj_t *name_label;
+    lv_obj_t *value_label;
+} monitor_sub_t;
+
+typedef struct {
+    lv_obj_t *card;
+    lv_obj_t *title_label;
+    lv_obj_t *status_dot;
+    lv_obj_t *value_label;
+    lv_obj_t *bar;
+    lv_obj_t *arc;
+    lv_obj_t *needle;
+    lv_obj_t *bars[MONITOR_BAR_COUNT];
+    monitor_style_t style;
+    monitor_opening_t opening;
+    int min;
+    int max;
+    bool unavailable;
+    uint8_t sub_count;
+    monitor_sub_t subs[APP_MAX_MONITOR_SUBS];
+} monitor_ctx_t;
+
+static bool monitor_state_is_unavailable(const char *state_text)
+{
+    if (state_text == NULL || state_text[0] == '\0') {
+        return true;
+    }
+    return strcmp(state_text, "unavailable") == 0 || strcmp(state_text, "unknown") == 0;
+}
+
+static bool monitor_parse_float(const char *text, float *out)
+{
+    if (text == NULL || out == NULL) {
+        return false;
+    }
+    char *end = NULL;
+    float v = strtof(text, &end);
+    if (end == text) {
+        return false;
+    }
+    *out = v;
+    return true;
+}
+
+static int monitor_clamp_int(int v, int lo, int hi)
+{
+    if (v < lo) {
+        return lo;
+    }
+    if (v > hi) {
+        return hi;
+    }
+    return v;
+}
+
+static bool monitor_unit_is_percent(const char *unit)
+{
+    return unit != NULL && strcmp(unit, "%") == 0;
+}
+
+static int monitor_compute_percent(float value, const char *unit, int min, int max)
+{
+    if (monitor_unit_is_percent(unit)) {
+        return monitor_clamp_int((int)(value + 0.5f), 0, 100);
+    }
+    if (max > min) {
+        int p = (int)(((value - (float)min) / ((float)max - (float)min)) * 100.0f + 0.5f);
+        return monitor_clamp_int(p, 0, 100);
+    }
+    if (value >= 0.0f && value <= 100.0f) {
+        return monitor_clamp_int((int)(value + 0.5f), 0, 100);
+    }
+    return 0;
+}
+
+static monitor_style_t monitor_style_from_variant(const char *variant)
+{
+    if (variant == NULL || variant[0] == '\0' || strcmp(variant, "default") == 0) {
+        return MONITOR_STYLE_DEFAULT;
+    }
+    if (strcmp(variant, "percent") == 0 || strcmp(variant, "percent_bar") == 0) {
+        return MONITOR_STYLE_PERCENT;
+    }
+    if (strcmp(variant, "arc") == 0) {
+        return MONITOR_STYLE_ARC;
+    }
+    if (strcmp(variant, "arc_semi") == 0) {
+        return MONITOR_STYLE_ARC_SEMI;
+    }
+    if (strcmp(variant, "gauge") == 0 || strcmp(variant, "gauge_needle") == 0) {
+        return MONITOR_STYLE_GAUGE;
+    }
+    if (strcmp(variant, "bars") == 0 || strcmp(variant, "signal_bars") == 0) {
+        return MONITOR_STYLE_BARS;
+    }
+    return MONITOR_STYLE_DEFAULT;
+}
+
+static monitor_opening_t monitor_opening_from_variant(const char *variant)
+{
+    if (variant != NULL) {
+        if (strcmp(variant, "right") == 0) {
+            return MONITOR_OPENING_RIGHT;
+        }
+        if (strcmp(variant, "top") == 0) {
+            return MONITOR_OPENING_TOP;
+        }
+        if (strcmp(variant, "bottom") == 0) {
+            return MONITOR_OPENING_BOTTOM;
+        }
+    }
+    return MONITOR_OPENING_LEFT;
+}
+
+static void monitor_arc_angles(monitor_style_t style, monitor_opening_t opening, uint16_t *bg_start, uint16_t *bg_end)
+{
+    if (style == MONITOR_STYLE_ARC || style == MONITOR_STYLE_GAUGE) {
+        *bg_start = 135;
+        *bg_end = 45;
+        return;
+    }
+    switch (opening) {
+        case MONITOR_OPENING_LEFT:
+            *bg_start = 270;
+            *bg_end = 90;
+            break;
+        case MONITOR_OPENING_RIGHT:
+            *bg_start = 90;
+            *bg_end = 270;
+            break;
+        case MONITOR_OPENING_TOP:
+            *bg_start = 0;
+            *bg_end = 180;
+            break;
+        case MONITOR_OPENING_BOTTOM:
+        default:
+            *bg_start = 180;
+            *bg_end = 360;
+            break;
+    }
+}
+
+static const lv_font_t *monitor_pick_value_font(const monitor_ctx_t *ctx)
+{
+    if (ctx == NULL || ctx->card == NULL) {
+        return MONITOR_VALUE_FONT_MEDIUM;
+    }
+
+    lv_coord_t w = lv_obj_get_width(ctx->card);
+    lv_coord_t h = lv_obj_get_height(ctx->card);
+    lv_coord_t min_dim = (w < h) ? w : h;
+
+    if (min_dim >= 260) {
+        return MONITOR_VALUE_FONT_LARGE;
+    }
+    if (min_dim >= 160) {
+        return MONITOR_VALUE_FONT_MEDIUM;
+    }
+    return MONITOR_VALUE_FONT_SMALL;
+}
+
+static void monitor_format_state(const ha_state_t *state, char *buf, size_t len)
+{
+    if (state == NULL || buf == NULL || len == 0) {
+        return;
+    }
+    if (monitor_state_is_unavailable(state->state)) {
+        snprintf(buf, len, "--");
+        return;
+    }
+
+    const char *unit = NULL;
+    cJSON *attrs = cJSON_Parse(state->attributes_json);
+    if (attrs != NULL) {
+        cJSON *unit_item = cJSON_GetObjectItemCaseSensitive(attrs, "unit_of_measurement");
+        if (cJSON_IsString(unit_item) && unit_item->valuestring != NULL) {
+            unit = unit_item->valuestring;
+        }
+    }
+
+    float value = 0.0f;
+    bool numeric = monitor_parse_float(state->state, &value);
+    if (numeric && unit != NULL && unit[0] != '\0') {
+        if (monitor_unit_is_percent(unit)) {
+            snprintf(buf, len, "%s%%", state->state);
+        } else {
+            snprintf(buf, len, "%s %s", state->state, unit);
+        }
+    } else {
+        snprintf(buf, len, "%s", state->state);
+    }
+
+    if (attrs != NULL) {
+        cJSON_Delete(attrs);
+    }
+}
+
+static void monitor_set_status(monitor_ctx_t *ctx, bool available)
+{
+    if (ctx == NULL || ctx->status_dot == NULL) {
+        return;
+    }
+    lv_obj_set_style_bg_color(
+        ctx->status_dot,
+        lv_color_hex(available ? APP_UI_COLOR_STATE_ON : APP_UI_COLOR_CARD_BORDER),
+        LV_PART_MAIN);
+}
+
+static void monitor_set_value_text(monitor_ctx_t *ctx, const char *text)
+{
+    if (ctx == NULL || ctx->value_label == NULL) {
+        return;
+    }
+    lv_label_set_text(ctx->value_label, (text != NULL && text[0] != '\0') ? text : "--");
+}
+
+static lv_color_t monitor_threshold_color(int pct)
+{
+    if (pct >= 85) {
+        return lv_color_hex(APP_UI_COLOR_ERROR);
+    }
+    if (pct >= 60) {
+        return lv_color_hex(0xF0A030);
+    }
+    return lv_color_hex(APP_UI_COLOR_STATE_ON);
+}
+
+static int monitor_sub_area_height(const monitor_ctx_t *ctx)
+{
+    if (ctx->sub_count == 0) {
+        return 0;
+    }
+    if (ctx->sub_count == 1) {
+        return 28;
+    }
+    return 56;
+}
+
+static void monitor_apply_layout(monitor_ctx_t *ctx)
+{
+    if (ctx == NULL || ctx->card == NULL || ctx->title_label == NULL || ctx->value_label == NULL) {
+        return;
+    }
+
+    lv_obj_t *card = ctx->card;
+    lv_obj_update_layout(card);
+
+    lv_coord_t cw = lv_obj_get_width(card) - lv_obj_get_style_pad_left(card, LV_PART_MAIN) -
+                    lv_obj_get_style_pad_right(card, LV_PART_MAIN);
+    lv_coord_t ch = lv_obj_get_height(card) - lv_obj_get_style_pad_top(card, LV_PART_MAIN) -
+                    lv_obj_get_style_pad_bottom(card, LV_PART_MAIN);
+    if (cw < 40) {
+        cw = 40;
+    }
+    if (ch < 60) {
+        ch = 60;
+    }
+
+    lv_obj_set_style_text_font(ctx->title_label, APP_FONT_TEXT_20, LV_PART_MAIN);
+    lv_obj_set_style_text_align(ctx->title_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_width(ctx->title_label, cw - 22);
+    lv_obj_set_pos(ctx->title_label, 0, 0);
+    lv_obj_update_layout(ctx->title_label);
+    lv_coord_t title_h = lv_obj_get_height(ctx->title_label);
+    if (title_h < 20) {
+        title_h = 20;
+    }
+
+    lv_obj_set_size(ctx->status_dot, 10, 10);
+    lv_obj_align(ctx->status_dot, LV_ALIGN_TOP_RIGHT, 0, 4);
+
+    lv_coord_t sub_h = monitor_sub_area_height(ctx);
+    lv_coord_t gap = (ctx->sub_count > 0) ? 4 : 0;
+    lv_coord_t main_h = ch - title_h - sub_h - gap;
+    if (main_h < 36) {
+        main_h = 36;
+    }
+    lv_coord_t main_y = title_h + gap;
+
+    if (ctx->style == MONITOR_STYLE_DEFAULT) {
+        lv_obj_set_style_text_font(ctx->value_label, monitor_pick_value_font(ctx), LV_PART_MAIN);
+        lv_obj_set_style_text_align(ctx->value_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_obj_set_size(ctx->value_label, cw, main_h);
+        lv_obj_set_pos(ctx->value_label, 0, main_y);
+    } else if (ctx->style == MONITOR_STYLE_PERCENT) {
+        lv_obj_set_style_text_font(ctx->value_label, monitor_pick_value_font(ctx), LV_PART_MAIN);
+        lv_obj_set_style_text_align(ctx->value_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_obj_set_size(ctx->value_label, cw, main_h - 22);
+        lv_obj_set_pos(ctx->value_label, 0, main_y);
+        if (ctx->bar != NULL) {
+            lv_obj_set_size(ctx->bar, cw, 12);
+            lv_obj_set_pos(ctx->bar, 0, main_y + main_h - 20);
+        }
+    } else if (ctx->style == MONITOR_STYLE_BARS) {
+        /* Discrete signal-style bars with the big value above. */
+        lv_obj_set_style_text_font(ctx->value_label, monitor_pick_value_font(ctx), LV_PART_MAIN);
+        lv_obj_set_style_text_align(ctx->value_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_coord_t bars_h = (main_h > 70) ? 26 : 18;
+        lv_coord_t bars_y = main_y + main_h - bars_h;
+        lv_obj_set_size(ctx->value_label, cw, main_h - bars_h - 4);
+        lv_obj_set_pos(ctx->value_label, 0, main_y);
+
+        lv_coord_t gap = 4;
+        lv_coord_t bar_w = (cw - (MONITOR_BAR_COUNT - 1) * gap) / MONITOR_BAR_COUNT;
+        if (bar_w < 4) {
+            bar_w = 4;
+        }
+        lv_coord_t total_w = bar_w * MONITOR_BAR_COUNT + gap * (MONITOR_BAR_COUNT - 1);
+        lv_coord_t start_x = (cw - total_w) / 2;
+        for (int i = 0; i < MONITOR_BAR_COUNT; i++) {
+            lv_obj_t *b = ctx->bars[i];
+            if (b == NULL) {
+                continue;
+            }
+            lv_obj_set_size(b, bar_w, bars_h);
+            lv_obj_set_pos(b, start_x + i * (bar_w + gap), bars_y);
+        }
+    } else {
+        /* arc / arc_semi / gauge */
+        lv_coord_t arc_diam = (cw < main_h) ? cw : main_h;
+        if (arc_diam < 40) {
+            arc_diam = 40;
+        }
+        lv_obj_set_style_text_font(
+            ctx->value_label,
+            (arc_diam >= 150) ? MONITOR_VALUE_FONT_LARGE :
+                ((arc_diam >= 90) ? MONITOR_VALUE_FONT_MEDIUM : MONITOR_VALUE_FONT_SMALL),
+            LV_PART_MAIN);
+        lv_obj_set_style_text_align(ctx->value_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_obj_set_size(ctx->value_label, arc_diam, arc_diam);
+        lv_obj_set_pos(ctx->value_label, (cw - arc_diam) / 2, main_y + (main_h - arc_diam) / 2);
+        if (ctx->arc != NULL) {
+            lv_obj_set_size(ctx->arc, arc_diam, arc_diam);
+            lv_obj_set_pos(ctx->arc, (cw - arc_diam) / 2, main_y + (main_h - arc_diam) / 2);
+        }
+        if (ctx->needle != NULL) {
+            lv_coord_t needle_len = arc_diam / 2 - 8;
+            if (needle_len < 12) {
+                needle_len = 12;
+            }
+            lv_obj_set_size(ctx->needle, needle_len, 3);
+            lv_obj_set_style_transform_pivot_x(ctx->needle, 0, LV_PART_MAIN);
+            lv_obj_set_style_transform_pivot_y(ctx->needle, 1, LV_PART_MAIN);
+            lv_obj_set_pos(ctx->needle, cw / 2, main_y + main_h / 2 - 1);
+        }
+    }
+
+    /* Sub-stat rows anchored to the bottom of the tile. */
+    if (ctx->sub_count == 0) {
+        return;
+    }
+
+    lv_coord_t sub_y = ch - sub_h;
+    lv_obj_set_style_text_font(ctx->value_label, lv_obj_get_style_text_font(ctx->value_label, LV_PART_MAIN), LV_PART_MAIN);
+
+    for (uint8_t i = 0; i < ctx->sub_count; i++) {
+        monitor_sub_t *sub = &ctx->subs[i];
+        if (sub->name_label == NULL || sub->value_label == NULL) {
+            continue;
+        }
+
+        lv_obj_set_style_text_font(sub->name_label, APP_FONT_TEXT_12, LV_PART_MAIN);
+        lv_obj_set_style_text_font(sub->value_label, APP_FONT_TEXT_16, LV_PART_MAIN);
+
+        if (ctx->sub_count == 1) {
+            lv_obj_set_style_text_align(sub->name_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+            lv_obj_set_style_text_align(sub->value_label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+            lv_obj_set_size(sub->name_label, cw / 2, 28);
+            lv_obj_set_size(sub->value_label, cw / 2, 28);
+            lv_obj_set_pos(sub->name_label, 0, sub_y);
+            lv_obj_set_pos(sub->value_label, cw / 2, sub_y);
+        } else {
+            lv_coord_t cell_w = (cw - 10) / 2;
+            lv_coord_t row_h = 28;
+            lv_coord_t col = (lv_coord_t)(i % 2);
+            lv_coord_t row = (lv_coord_t)(i / 2);
+            lv_obj_set_style_text_align(sub->name_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+            lv_obj_set_style_text_align(sub->value_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+            lv_obj_set_size(sub->name_label, cell_w, 12);
+            lv_obj_set_size(sub->value_label, cell_w, 14);
+            lv_obj_set_pos(sub->name_label, col * (cell_w + 10), sub_y + row * row_h);
+            lv_obj_set_pos(sub->value_label, col * (cell_w + 10), sub_y + row * row_h + 13);
+        }
+    }
+}
+
+static void monitor_apply_unavailable(monitor_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+    ctx->unavailable = true;
+    monitor_set_status(ctx, false);
+    monitor_set_value_text(ctx, "--");
+    if (ctx->bar != NULL) {
+        lv_bar_set_value(ctx->bar, 0, LV_ANIM_OFF);
+    }
+    if (ctx->arc != NULL) {
+        lv_arc_set_value(ctx->arc, 0);
+    }
+    if (ctx->needle != NULL) {
+        lv_obj_set_style_transform_rotation(ctx->needle, 1350, LV_PART_MAIN);
+    }
+    for (int i = 0; i < MONITOR_BAR_COUNT; i++) {
+        if (ctx->bars[i] != NULL) {
+            lv_obj_set_style_bg_color(ctx->bars[i], lv_color_hex(APP_UI_COLOR_CARD_BORDER), LV_PART_MAIN);
+        }
+    }
+    monitor_apply_layout(ctx);
+}
+
+static void monitor_event_cb(lv_event_t *event)
+{
+    if (event == NULL) {
+        return;
+    }
+    monitor_ctx_t *ctx = (monitor_ctx_t *)lv_event_get_user_data(event);
+    if (ctx == NULL) {
+        return;
+    }
+
+    lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_DELETE) {
+        free(ctx);
+    } else if (code == LV_EVENT_SIZE_CHANGED) {
+        monitor_apply_layout(ctx);
+    }
+}
+
+static int monitor_parse_subs(const char *list, monitor_sub_t *subs, size_t max_subs)
+{
+    if (list == NULL || list[0] == '\0' || subs == NULL || max_subs == 0) {
+        return 0;
+    }
+
+    size_t count = 0;
+    const char *cursor = list;
+    while (*cursor != '\0' && count < max_subs) {
+        while (*cursor == ' ' || *cursor == ',' || *cursor == '\t' || *cursor == '\n' || *cursor == '\r') {
+            cursor++;
+        }
+        if (*cursor == '\0') {
+            break;
+        }
+        const char *start = cursor;
+        while (*cursor != '\0' && *cursor != ',') {
+            cursor++;
+        }
+        size_t len = (size_t)(cursor - start);
+        while (len > 0 && (start[len - 1] == ' ' || start[len - 1] == '\t' ||
+                           start[len - 1] == '\n' || start[len - 1] == '\r')) {
+            len--;
+        }
+        if (len == 0 || len >= APP_MAX_ENTITY_ID_LEN) {
+            continue;
+        }
+        memcpy(subs[count].entity_id, start, len);
+        subs[count].entity_id[len] = '\0';
+        count++;
+    }
+    return (int)count;
+}
+
+esp_err_t w_monitor_tile_create(const ui_widget_def_t *def, lv_obj_t *parent, ui_widget_instance_t *out_instance)
+{
+    if (def == NULL || parent == NULL || out_instance == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    lv_obj_t *card = lv_obj_create(parent);
+    lv_obj_set_pos(card, def->x, def->y);
+    lv_obj_set_size(card, def->w, def->h);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    theme_default_style_card(card);
+    lv_obj_set_style_pad_left(card, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(card, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(card, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(card, 10, LV_PART_MAIN);
+
+    lv_obj_t *title = lv_label_create(card);
+    lv_label_set_text(title, def->title[0] ? def->title : def->id);
+    lv_obj_set_style_text_color(title, theme_default_color_text_muted(), LV_PART_MAIN);
+
+    lv_obj_t *dot = lv_obj_create(card);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_all(dot, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(APP_UI_COLOR_CARD_BORDER), LV_PART_MAIN);
+
+    lv_obj_t *value = lv_label_create(card);
+    lv_label_set_text(value, "--");
+    lv_obj_set_style_text_color(value, theme_default_color_text_primary(), LV_PART_MAIN);
+
+    monitor_style_t style = monitor_style_from_variant(def->style_variant);
+    monitor_opening_t opening = monitor_opening_from_variant(def->arc_opening);
+    lv_obj_t *bar = NULL;
+    lv_obj_t *arc = NULL;
+    lv_obj_t *needle = NULL;
+    lv_obj_t *bars[MONITOR_BAR_COUNT] = {0};
+
+    if (style == MONITOR_STYLE_PERCENT) {
+        bar = lv_bar_create(card);
+        lv_bar_set_range(bar, 0, 100);
+        lv_bar_set_value(bar, 0, LV_ANIM_OFF);
+        lv_obj_set_style_bg_color(bar, lv_color_hex(APP_UI_COLOR_CARD_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(bar, lv_color_hex(APP_UI_COLOR_STATE_ON), LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_INDICATOR);
+        lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    } else if (style == MONITOR_STYLE_ARC || style == MONITOR_STYLE_ARC_SEMI || style == MONITOR_STYLE_GAUGE) {
+        arc = lv_arc_create(card);
+        lv_arc_set_mode(arc, LV_ARC_MODE_NORMAL);
+        lv_arc_set_range(arc, 0, 100);
+        lv_arc_set_value(arc, 0);
+        lv_arc_set_rotation(arc, 0);
+        uint16_t bg_start = 0;
+        uint16_t bg_end = 0;
+        monitor_arc_angles(style, opening, &bg_start, &bg_end);
+        lv_arc_set_bg_angles(arc, bg_start, bg_end);
+        lv_obj_set_style_arc_color(arc, lv_color_hex(APP_UI_COLOR_CARD_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_arc_opa(arc, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(arc, 14, LV_PART_MAIN);
+        lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
+        lv_obj_set_style_arc_color(arc, lv_color_hex(APP_UI_COLOR_STATE_ON), LV_PART_INDICATOR);
+        lv_obj_set_style_arc_opa(arc, LV_OPA_COVER, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_width(arc, 14, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
+        lv_obj_set_style_pad_all(arc, 0, LV_PART_KNOB);
+
+        if (style == MONITOR_STYLE_GAUGE) {
+            needle = lv_obj_create(card);
+            lv_obj_clear_flag(needle, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_set_style_pad_all(needle, 0, LV_PART_MAIN);
+            lv_obj_set_style_border_width(needle, 0, LV_PART_MAIN);
+            lv_obj_set_style_radius(needle, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(needle, lv_color_hex(APP_UI_COLOR_STATE_ON), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(needle, LV_OPA_COVER, LV_PART_MAIN);
+        }
+    } else if (style == MONITOR_STYLE_BARS) {
+        for (int i = 0; i < MONITOR_BAR_COUNT; i++) {
+            bars[i] = lv_obj_create(card);
+            lv_obj_clear_flag(bars[i], LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_set_style_pad_all(bars[i], 0, LV_PART_MAIN);
+            lv_obj_set_style_border_width(bars[i], 0, LV_PART_MAIN);
+            lv_obj_set_style_radius(bars[i], 2, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(bars[i], lv_color_hex(APP_UI_COLOR_CARD_BORDER), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(bars[i], LV_OPA_COVER, LV_PART_MAIN);
+        }
+    }
+
+    monitor_ctx_t *ctx = ui_calloc_prefer_psram(1, sizeof(monitor_ctx_t));
+    if (ctx == NULL) {
+        lv_obj_del(card);
+        return ESP_ERR_NO_MEM;
+    }
+
+    ctx->card = card;
+    ctx->title_label = title;
+    ctx->status_dot = dot;
+    ctx->value_label = value;
+    ctx->bar = bar;
+    ctx->arc = arc;
+    ctx->needle = needle;
+    memcpy(ctx->bars, bars, sizeof(bars));
+    ctx->style = style;
+    ctx->opening = opening;
+    ctx->min = def->sensor_min;
+    ctx->max = def->sensor_max;
+    ctx->unavailable = false;
+    ctx->sub_count = (uint8_t)monitor_parse_subs(def->extra_entity_ids, ctx->subs, APP_MAX_MONITOR_SUBS);
+
+    for (uint8_t i = 0; i < ctx->sub_count; i++) {
+        ctx->subs[i].name_label = lv_label_create(card);
+        lv_obj_set_style_text_color(ctx->subs[i].name_label, theme_default_color_text_muted(), LV_PART_MAIN);
+        lv_obj_set_style_text_font(ctx->subs[i].name_label, APP_FONT_TEXT_12, LV_PART_MAIN);
+        lv_label_set_text(ctx->subs[i].name_label, "");
+
+        ctx->subs[i].value_label = lv_label_create(card);
+        lv_obj_set_style_text_color(ctx->subs[i].value_label, theme_default_color_text_primary(), LV_PART_MAIN);
+        lv_obj_set_style_text_font(ctx->subs[i].value_label, APP_FONT_TEXT_16, LV_PART_MAIN);
+        lv_label_set_text(ctx->subs[i].value_label, "--");
+    }
+
+    lv_obj_add_event_cb(card, monitor_event_cb, LV_EVENT_DELETE, ctx);
+    lv_obj_add_event_cb(card, monitor_event_cb, LV_EVENT_SIZE_CHANGED, ctx);
+
+    monitor_apply_layout(ctx);
+
+    out_instance->obj = card;
+    out_instance->ctx = ctx;
+    return ESP_OK;
+}
+
+static bool monitor_entity_matches(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+    return strncmp(a, b, APP_MAX_ENTITY_ID_LEN) == 0;
+}
+
+static void monitor_update_primary(monitor_ctx_t *ctx, const ha_state_t *state)
+{
+    if (ctx == NULL || state == NULL) {
+        return;
+    }
+
+    if (monitor_state_is_unavailable(state->state)) {
+        monitor_apply_unavailable(ctx);
+        return;
+    }
+
+    char value_text[96] = {0};
+    monitor_format_state(state, value_text, sizeof(value_text));
+    ctx->unavailable = false;
+    monitor_set_status(ctx, true);
+    monitor_set_value_text(ctx, value_text);
+
+    if (ctx->bar != NULL || ctx->arc != NULL || ctx->needle != NULL ||
+        ctx->style == MONITOR_STYLE_BARS) {
+        float fvalue = 0.0f;
+        if (monitor_parse_float(state->state, &fvalue)) {
+            const char *unit = NULL;
+            cJSON *attrs = cJSON_Parse(state->attributes_json);
+            if (attrs != NULL) {
+                cJSON *unit_item = cJSON_GetObjectItemCaseSensitive(attrs, "unit_of_measurement");
+                if (cJSON_IsString(unit_item) && unit_item->valuestring != NULL) {
+                    unit = unit_item->valuestring;
+                }
+            }
+            int pct = monitor_compute_percent(fvalue, unit, ctx->min, ctx->max);
+            lv_color_t pct_color = monitor_threshold_color(pct);
+            if (ctx->bar != NULL) {
+                lv_bar_set_value(ctx->bar, pct, LV_ANIM_ON);
+                lv_obj_set_style_bg_color(ctx->bar, pct_color, LV_PART_INDICATOR);
+            }
+            if (ctx->arc != NULL) {
+                lv_arc_set_value(ctx->arc, pct);
+                if (ctx->style == MONITOR_STYLE_GAUGE) {
+                    lv_obj_set_style_arc_color(ctx->arc, pct_color, LV_PART_INDICATOR);
+                }
+            }
+            if (ctx->needle != NULL) {
+                lv_obj_set_style_transform_rotation(ctx->needle, 1350 + pct * 27, LV_PART_MAIN);
+                lv_obj_set_style_bg_color(ctx->needle, pct_color, LV_PART_MAIN);
+            }
+            if (ctx->style == MONITOR_STYLE_BARS) {
+                int filled = (pct * MONITOR_BAR_COUNT + 50) / 100;
+                for (int i = 0; i < MONITOR_BAR_COUNT; i++) {
+                    lv_obj_t *b = ctx->bars[i];
+                    if (b == NULL) {
+                        continue;
+                    }
+                    lv_obj_set_style_bg_color(
+                        b,
+                        (i < filled) ? pct_color : lv_color_hex(APP_UI_COLOR_CARD_BORDER),
+                        LV_PART_MAIN);
+                }
+            }
+            if (attrs != NULL) {
+                cJSON_Delete(attrs);
+            }
+        }
+    }
+
+    monitor_apply_layout(ctx);
+}
+
+static void monitor_update_sub(monitor_ctx_t *ctx, const ha_state_t *state)
+{
+    if (ctx == NULL || state == NULL) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < ctx->sub_count; i++) {
+        if (monitor_entity_matches(ctx->subs[i].entity_id, state->entity_id)) {
+            if (ctx->subs[i].value_label != NULL) {
+                char value_text[96] = {0};
+                monitor_format_state(state, value_text, sizeof(value_text));
+                lv_label_set_text(ctx->subs[i].value_label, value_text);
+            }
+            /* Derive a short friendly label from the entity id suffix. */
+            if (ctx->subs[i].name_label != NULL) {
+                const char *dot = strchr(ctx->subs[i].entity_id, '.');
+                if (dot != NULL) {
+                    lv_label_set_text(ctx->subs[i].name_label, dot + 1);
+                }
+            }
+            return;
+        }
+    }
+}
+
+void w_monitor_tile_apply_state(ui_widget_instance_t *instance, const ha_state_t *state)
+{
+    if (instance == NULL || instance->obj == NULL || state == NULL) {
+        return;
+    }
+
+    monitor_ctx_t *ctx = (monitor_ctx_t *)instance->ctx;
+    if (ctx == NULL) {
+        return;
+    }
+
+    if (monitor_entity_matches(instance->entity_id, state->entity_id)) {
+        monitor_update_primary(ctx, state);
+    } else {
+        monitor_update_sub(ctx, state);
+    }
+}
+
+void w_monitor_tile_mark_unavailable(ui_widget_instance_t *instance)
+{
+    if (instance == NULL || instance->obj == NULL) {
+        return;
+    }
+
+    monitor_ctx_t *ctx = (monitor_ctx_t *)instance->ctx;
+    if (ctx == NULL) {
+        return;
+    }
+
+    monitor_apply_unavailable(ctx);
+}
