@@ -44,7 +44,7 @@ Changes relative to upstream (build variant `panel10jc`):
 | Backlight                                | LEDC PWM on GPIO23                                                               |
 | Network                                  | ESP32-C6 ESP-Hosted SDIO co-processor                                           |
 | Cameras / Cameras                        | **Removed** (variant ships without camera support)                                |
-| Xiaozhi AI / Xiaozhi AI                  | **Removed** (feature compile-disabled; no tokens bundled)                          |
+| Xiaozhi AI / Xiaozhi AI                  | **Built in, disabled by default** (no tokens bundled; enable in Settings + cloud pairing) |
 | Entity scale / Entity scale              | `APP_HA_MAX_ENTITIES` raised to **3600**                                         |
 | Screensaver / Screensaver                | Graphical wallpaper + clock, brightness slider, dim-after-idle, night mode       |
 | Web editor / Web editor                  | Extended: Screen/Screensaver, System tabs; per-tile font/scale options           |
@@ -104,7 +104,7 @@ Zmiany względem oryginału (wariant kompilacji `panel10jc`):
 | Podświetlenie                             | PWM LEDC na GPIO23                                                               |
 | Sieć                                      | Koprocesor ESP32-C6 ESP-Hosted SDIO                                              |
 | Kamery                                    | **Usunięte** (wariant bez kamer)                                                  |
-| Xiaozhi AI                                | **Usunięty** (funkcja wyłączona w kompilacji; bez tokenów)                         |
+| Xiaozhi AI                                | **Wkompilowane, domyślnie wyłączone** (bez tokenów; włącz w Ustawienia + parowanie z chmurą) |
 | Skala encji                               | `APP_HA_MAX_ENTITIES` podniesione do **3600**                                     |
 | Wygaszacz                                 | Tapeta graficzna + zegar, suwak jasności, przyciemnianie, tryb nocny              |
 | Edytor WWW                                | Rozszerzony: zakładki Ekran/Wygaszacz, System; opcje czcionki/skalowania kafelków |

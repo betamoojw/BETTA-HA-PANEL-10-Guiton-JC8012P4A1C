@@ -90,7 +90,7 @@
 | Build preset / Predefiniowany | `panel10jc`                                                                     |
 | Static IP / IP statyczne      | ostatni oktet `.36` (configurable / konfigurowalne)                              |
 | Cameras / Kamery              | ❌ disabled / wyłączone                                                          |
-| Xiaozhi AI                    | ❌ disabled / wyłączony                                                          |
+| Xiaozhi AI                    | ⚠️ built-in, off by default / wkompilowane, domyślnie wyłączone                |
 
 ---
 
@@ -160,7 +160,7 @@ Edytor ma dwie zakładki: **Układ** (strony, kafelki, inspektor) i **Ustawienia
 |----|----|
 | **Wi-Fi** — SSID, password, country, BSSID lock, scan | **Wi-Fi** — SSID, hasło, kraj, blokada BSSID, skanowanie |
 | **Home Assistant** — URL + long-lived token | **Home Assistant** — URL + token długoterminowy |
-| **Xiaozhi AI** — hidden/disabled on this variant | **Xiaozhi AI** — ukryte/wyłączone w tym wariancie |
+| **Xiaozhi AI** — built in, off by default (enable in Settings → Xiaozhi AI + cloud pairing) | **Xiaozhi AI** — wkompilowane, domyślnie wyłączone (włącz w Ustawienia → Xiaozhi AI + parowanie z chmurą) |
 | **SD card** — mount, storage, config backup | **Karta SD** — montowanie, pamięć, backup konfiguracji |
 | **Time** — NTP/timezone | **Czas** — NTP/strefa czasowa |
 | **Interface** — language, UI scale, fonts | **Interfejs** — język, skalowanie UI, czcionki |
@@ -178,7 +178,7 @@ Edytor ma dwie zakładki: **Układ** (strony, kafelki, inspektor) i **Ustawienia
 - **License / Licencja:** [LicenseRef-FNCL-1.1 (Federation Non-Commercial License v1.1)](LICENSE) — **non-commercial** use. Commercial use requires a separate written license from the copyright holder. See [`LICENSE`](LICENSE).
 - **Copyright:** `Copyright (c) 2026 Cpt_Kirk`.
 - **Upstream / Źródło:** this is a port/extension of **[BETTA-HA-PANEL](https://github.com/cptkirki/BETTA-HA-PANEL)** by **Cpt_Kirk (cptkirki)**. All original work and branding remain theirs. See [`README.UPSTREAM.md`](README.UPSTREAM.md).
-- **This variant / Ten wariant:** `panel10jc` for Guition **JC8012P4A1C-I-W-Y** — cameras and Xiaozhi removed, panel-specific drivers added (JD9365 DSI, GSL3680 touch), graphical screensaver, extended settings and a scaled entity model (3600 entities). Full change history in [`release-notes.md`](release-notes.md).
+- **This variant / Ten wariant:** `panel10jc` for Guition **JC8012P4A1C-I-W-Y** — cameras removed, panel-specific drivers added (JD9365 DSI, GSL3680 touch), graphical screensaver, extended settings and a scaled entity model (3600 entities). Xiaozhi is compiled in but **disabled by default** (enable in Settings → Xiaozhi AI + cloud pairing). Full change history in [`release-notes.md`](release-notes.md).
 
 > **PL:** Projekt udostępniany na licencji **FNCL-1.1 (niekomercyjnej)** — wykorzystanie komercyjne wymaga osobnej pisemnej licencji od autora. To port/rozszerzenie **BETTA-HA-PANEL** autorstwa **Cpt_Kirk (cptkirki)**; cała oryginalna praca i nazwa należą do niego.
 

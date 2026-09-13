@@ -154,7 +154,7 @@ rozmiaru, koloru i skali w edytorze.
 |--------------------------|--------------------------------------------------------------------------------------|
 | Wi-Fi                    | SSID, password, country, BSSID lock, scan                                            |
 | Home Assistant           | Base URL + long-lived access token                                                   |
-| Xiaozhi AI               | Disabled on this variant (no tokens shipped)                                          |
+| Xiaozhi AI               | Built in — disabled by default (enable in Settings → Xiaozhi AI + cloud pairing; no tokens) |
 | Karta SD (SD card)       | Mount status, storage info, config export/import (backup)                            |
 | Czas (Time)              | NTP server, timezone                                                                  |
 | Interfejs (Interface)    | Language (EN/DE/ES/FR + custom JSON), UI scale, font scale                           |
@@ -228,9 +228,10 @@ włącza się wygaszacz. Tryb nocny przyciemnia panel w wybranych godzinach.
 | `W httpd_uri: URI '/api/cameras' not found`                                    | Editor polling a camera endpoint that this variant intentionally removed.            | None — cameras are disabled / Nic — kamery wyłączone |
 | `W httpd_uri: URI '/app.js.gz' not found`                                      | Browser asked for a gzip-compressed asset the server serves uncompressed.           | None — harmless 404 / Nic — nieszkodliwe 404  |
 
-> **Note / Uwaga:** the camera/Xiaozhi endpoints are expected to 404 on this
-> variant — the features are compile-disabled (`APP_FEATURE_XIAOZHI` off) and
-> no camera driver is linked.
+> **Note / Uwaga:** the `/api/cameras` endpoint is expected to 404 on this
+> variant — cameras are compile-disabled (`APP_FEATURE_CAMERAS=n`) and no
+> camera driver is linked. Xiaozhi **is** compiled in but stays idle until it
+> is enabled in **Settings → Xiaozhi AI** and bound to a Xiaozhi cloud account.
 
 ### Common issues / Typowe problemy
 
