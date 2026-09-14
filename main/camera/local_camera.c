@@ -8,6 +8,7 @@
  */
 #include "camera/local_camera.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -41,12 +42,20 @@
 #define LOCAL_CAMERA_MOTION_GRID       32
 #define LOCAL_CAMERA_MOTION_THRESHOLD  8
 #define LOCAL_CAMERA_MOTION_COOLDOWN_MS 1000
+#define LOCAL_CAMERA_MOTION_START_DELAY_MS 2000
+#define LOCAL_CAMERA_MOTION_CELLS \
+    (LOCAL_CAMERA_MOTION_GRID * LOCAL_CAMERA_MOTION_GRID)
 
 typedef struct {
     int fd;
-    uint32_t width;
+    uint32_t width;    /* sensor/CSI capture resolution (full HD) */
     uint32_t height;
-    size_t buf_size;
+    size_t buf_size;   /* full-resolution RGB565 frame size */
+
+    bool downscale;    /* half-resolution output for JPEG cache/preview */
+    uint32_t out_width;   /* effective output resolution */
+    uint32_t out_height;
+    size_t out_size;   /* effective output frame size */
 
     uint8_t *capture_bufs[LOCAL_CAMERA_BUF_COUNT];
     uint8_t *latest_frame;
@@ -58,6 +67,7 @@ typedef struct {
     size_t jpeg_out_size;
 
     TaskHandle_t task;
+    TaskHandle_t watchdog_task;
     volatile bool stop_requested;
 
     bool motion_wake_enabled;
@@ -70,15 +80,51 @@ typedef struct {
     int64_t last_motion_ms;
     local_camera_motion_cb_t motion_cb;
     void *motion_user;
+
+    /* Motion detector tuning + live diagnostics (point 1). */
+    uint8_t motion_min_area_pct;
+    uint16_t motion_min_duration_ms;
+    uint16_t motion_cooldown_ms;
+    uint16_t motion_start_delay_ms;
+    bool motion_ignore_lighting;
+    uint8_t motion_zone_count;
+    local_camera_motion_zone_t motion_zones[LOCAL_CAMERA_MOTION_MAX_ZONES];
+    uint8_t motion_cell_zone[LOCAL_CAMERA_MOTION_CELLS];
+    bool motion_zone_mask_valid;
+    int64_t motion_started_at_ms;
+    int64_t motion_active_since_ms;
+    uint32_t motion_trigger_count;
+    bool motion_last_ignored_lighting;
+    uint8_t motion_last_level;
+    uint8_t motion_last_changed_pct;
+    uint8_t motion_zone_level[LOCAL_CAMERA_MOTION_MAX_ZONES];
+    uint8_t motion_zone_changed_pct[LOCAL_CAMERA_MOTION_MAX_ZONES];
 } local_camera_t;
 
 static local_camera_t s_cam = {
     .fd = -1,
+    .motion_threshold = LOCAL_CAMERA_MOTION_THRESHOLD,
+    .motion_cooldown_ms = LOCAL_CAMERA_MOTION_COOLDOWN_MS,
+    .motion_start_delay_ms = LOCAL_CAMERA_MOTION_START_DELAY_MS,
+    .motion_ignore_lighting = true,
 };
 
 static int64_t now_ms(void)
 {
     return (int64_t)esp_timer_get_time() / 1000;
+}
+
+static void log_camera_heap(const char *tag_msg)
+{
+    ESP_LOGW(TAG_CAMERA,
+             "%s: total_free=%u largest=%u dma_free=%u dma_largest=%u internal_free=%u psram_free=%u",
+             tag_msg,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 }
 
 static void set_flip(bool hflip, bool vflip)
@@ -117,9 +163,83 @@ static uint8_t rgb565_luma(uint16_t px)
     return (uint8_t)(((r * 30U) + (g * 30U) + (b * 11U)) >> 6);
 }
 
+/* Average four RGB565 pixels with rounding.  Produces noticeably cleaner
+ * 2x downscales than nearest-neighbour sampling. */
+static uint16_t rgb565_avg4(uint16_t a, uint16_t b, uint16_t c, uint16_t d)
+{
+    const uint32_t r = ((a >> 11) & 0x1FU) + ((b >> 11) & 0x1FU) +
+                       ((c >> 11) & 0x1FU) + ((d >> 11) & 0x1FU);
+    const uint32_t g = ((a >> 5) & 0x3FU) + ((b >> 5) & 0x3FU) +
+                       ((c >> 5) & 0x3FU) + ((d >> 5) & 0x3FU);
+    const uint32_t bl = (a & 0x1FU) + (b & 0x1FU) + (c & 0x1FU) + (d & 0x1FU);
+    return (uint16_t)((((r + 2U) >> 2) << 11) |
+                      (((g + 2U) >> 2) << 5) |
+                      ((bl + 2U) >> 2));
+}
+
+/* 2x box-average downscale: src (w x h) RGB565 -> dst (w/2 x h/2) RGB565. */
+static void downscale_rgb565_half(const uint8_t *src, uint8_t *dst, uint32_t w, uint32_t h)
+{
+    const uint32_t dw = w / 2;
+    const uint32_t dh = h / 2;
+    const size_t row_bytes = (size_t)w * 2;
+
+    for (uint32_t y = 0; y < dh; y++) {
+        const uint16_t *row0 = (const uint16_t *)(src + (size_t)(y * 2) * row_bytes);
+        const uint16_t *row1 = (const uint16_t *)(src + (size_t)(y * 2 + 1) * row_bytes);
+        uint16_t *drow = (uint16_t *)(dst + (size_t)y * dw * 2);
+        for (uint32_t x = 0; x < dw; x++) {
+            drow[x] = rgb565_avg4(row0[x * 2], row0[x * 2 + 1],
+                                  row1[x * 2], row1[x * 2 + 1]);
+        }
+    }
+}
+
+/* Rebuild the cached grid-cell -> zone-index lookup (0..N-1, 0xFF = not in any
+ * zone) from the percent-based zone rectangles.  Zone 0 always means the whole
+ * frame when no zones are configured. */
+static void motion_rebuild_zone_mask(void)
+{
+    const uint32_t g = LOCAL_CAMERA_MOTION_GRID;
+    memset(s_cam.motion_cell_zone, 0xFF, sizeof(s_cam.motion_cell_zone));
+
+    for (uint8_t z = 0; z < s_cam.motion_zone_count && z < LOCAL_CAMERA_MOTION_MAX_ZONES; z++) {
+        const local_camera_motion_zone_t *zn = &s_cam.motion_zones[z];
+        uint32_t x0 = ((uint32_t)zn->x * g) / 100;
+        uint32_t y0 = ((uint32_t)zn->y * g) / 100;
+        uint32_t x1 = ((uint32_t)(zn->x + zn->w) * g + 99) / 100;
+        uint32_t y1 = ((uint32_t)(zn->y + zn->h) * g + 99) / 100;
+        if (x1 > g) {
+            x1 = g;
+        }
+        if (y1 > g) {
+            y1 = g;
+        }
+        if (x0 >= x1) {
+            x1 = x0 + 1;
+        }
+        if (y0 >= y1) {
+            y1 = y0 + 1;
+        }
+        for (uint32_t cy = y0; cy < y1; cy++) {
+            for (uint32_t cx = x0; cx < x1; cx++) {
+                s_cam.motion_cell_zone[cy * g + cx] = z;
+            }
+        }
+    }
+
+    s_cam.motion_zone_mask_valid = (s_cam.motion_zone_count > 0);
+}
+
 static void motion_detect(const uint8_t *frame)
 {
     if (s_cam.prev_luma == NULL || frame == NULL) {
+        return;
+    }
+
+    const int64_t now = now_ms();
+    /* Grace period after STREAMON so AE/AWB converge before detection. */
+    if (now - s_cam.motion_started_at_ms < (int64_t)s_cam.motion_start_delay_ms) {
         return;
     }
 
@@ -129,31 +249,105 @@ static void motion_detect(const uint8_t *frame)
         return;
     }
 
+    const bool has_zones = s_cam.motion_zone_mask_valid;
+    const uint8_t threshold = s_cam.motion_threshold;
+    const uint8_t *mask = has_zones ? s_cam.motion_cell_zone : NULL;
+
     uint32_t diff_sum = 0;
+    int32_t signed_sum = 0;
+    uint32_t active_cells = 0;
+    uint32_t changed_cells = 0;
+    uint32_t zone_diff[LOCAL_CAMERA_MOTION_MAX_ZONES] = {0};
+    uint32_t zone_cells[LOCAL_CAMERA_MOTION_MAX_ZONES] = {0};
+    uint32_t zone_changed[LOCAL_CAMERA_MOTION_MAX_ZONES] = {0};
+
     uint8_t *prev = s_cam.prev_luma;
     for (uint32_t gy = 0; gy < LOCAL_CAMERA_MOTION_GRID; gy++) {
         const uint32_t y = (gy * step_y) + (step_y / 2);
         const uint8_t *row = frame + ((size_t)y * s_cam.width * 2);
         for (uint32_t gx = 0; gx < LOCAL_CAMERA_MOTION_GRID; gx++) {
+            const uint8_t z = has_zones ? mask[gy * LOCAL_CAMERA_MOTION_GRID + gx] : 0;
             const uint32_t x = (gx * step_x) + (step_x / 2);
             const uint8_t luma = rgb565_luma((uint16_t)(row[x * 2] | (row[x * 2 + 1] << 8)));
             const uint8_t old = *prev;
             *prev = luma;
-            diff_sum += (luma > old) ? (luma - old) : (old - luma);
             prev++;
+
+            if (z == 0xFF) {
+                continue;
+            }
+
+            const int16_t delta = (int16_t)luma - (int16_t)old;
+            const uint8_t abs_delta = delta < 0 ? (uint8_t)(-delta) : (uint8_t)delta;
+            diff_sum += abs_delta;
+            signed_sum += delta;
+            active_cells++;
+            if (abs_delta >= threshold) {
+                changed_cells++;
+            }
+            if (z < LOCAL_CAMERA_MOTION_MAX_ZONES) {
+                zone_diff[z] += abs_delta;
+                zone_cells[z]++;
+                if (abs_delta >= threshold) {
+                    zone_changed[z]++;
+                }
+            }
         }
     }
 
-    const uint32_t mean_diff = diff_sum / (LOCAL_CAMERA_MOTION_GRID * LOCAL_CAMERA_MOTION_GRID);
-    if (mean_diff < s_cam.motion_threshold) {
+    if (active_cells == 0) {
         return;
     }
 
-    const int64_t now = now_ms();
-    if (now - s_cam.last_motion_ms < LOCAL_CAMERA_MOTION_COOLDOWN_MS) {
+    const uint32_t mean_diff = diff_sum / active_cells;
+    const uint32_t changed_pct = (changed_cells * 100) / active_cells;
+
+    /* Publish live diagnostics for /api/camera/motion and the web editor. */
+    s_cam.motion_last_level = (uint8_t)(mean_diff > 255 ? 255 : mean_diff);
+    s_cam.motion_last_changed_pct = (uint8_t)(changed_pct > 100 ? 100 : changed_pct);
+    for (uint8_t z = 0; z < LOCAL_CAMERA_MOTION_MAX_ZONES; z++) {
+        s_cam.motion_zone_level[z] = zone_cells[z] ? (uint8_t)(zone_diff[z] / zone_cells[z]) : 0;
+        s_cam.motion_zone_changed_pct[z] =
+            zone_cells[z] ? (uint8_t)((zone_changed[z] * 100) / zone_cells[z]) : 0;
+    }
+
+    /* Global-brightness filter: when most cells move in the same direction by a
+     * similar amount it is a lighting change (lights on/off, AE step), not a
+     * person.  A moving subject produces mixed-direction deltas that cancel. */
+    s_cam.motion_last_ignored_lighting = false;
+    if (s_cam.motion_ignore_lighting && changed_pct >= 60) {
+        const int32_t mean_signed = signed_sum / (int32_t)active_cells;
+        const int32_t abs_signed = mean_signed < 0 ? -mean_signed : mean_signed;
+        if ((int32_t)mean_diff > 0 && abs_signed * 10 >= (int32_t)mean_diff * 7) {
+            s_cam.motion_last_ignored_lighting = true;
+            s_cam.motion_active_since_ms = 0;
+            return;
+        }
+    }
+
+    bool above = (mean_diff >= threshold);
+    if (s_cam.motion_min_area_pct > 0 && changed_pct < s_cam.motion_min_area_pct) {
+        above = false;
+    }
+
+    if (!above) {
+        s_cam.motion_active_since_ms = 0;
+        return;
+    }
+
+    /* Debounce: the change has to persist for min_duration_ms before firing. */
+    if (s_cam.motion_active_since_ms == 0) {
+        s_cam.motion_active_since_ms = now;
+    }
+    if (now - s_cam.motion_active_since_ms < (int64_t)s_cam.motion_min_duration_ms) {
+        return;
+    }
+
+    if (now - s_cam.last_motion_ms < (int64_t)s_cam.motion_cooldown_ms) {
         return;
     }
     s_cam.last_motion_ms = now;
+    s_cam.motion_trigger_count++;
 
     if (s_cam.motion_cb != NULL) {
         s_cam.motion_cb(s_cam.motion_user);
@@ -163,6 +357,7 @@ static void motion_detect(const uint8_t *frame)
 static void stream_task(void *arg)
 {
     (void)arg;
+    uint32_t dqbuf_failures = 0;
 
     while (!s_cam.stop_requested) {
         struct v4l2_buffer vb;
@@ -171,9 +366,17 @@ static void stream_task(void *arg)
         vb.memory = V4L2_MEMORY_USERPTR;
 
         if (ioctl(s_cam.fd, VIDIOC_DQBUF, &vb) != 0) {
+            /* VIDIOC_DQBUF normally blocks (never errors) when no frame has
+             * arrived, so this error path is rare.  The no-frames condition
+             * is reported by the frame-arrival watchdog task instead. */
+            dqbuf_failures++;
+            if (dqbuf_failures == 100) {
+                ESP_LOGW(TAG_CAMERA, "DQBUF failing (errno=%d): sensor not streaming", errno);
+            }
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
+        dqbuf_failures = 0;
 
         s_cam.frame_counter++;
 
@@ -181,7 +384,12 @@ static void stream_task(void *arg)
          * does not contend with the DMA buffers. */
         if ((s_cam.frame_counter & 1U) == 0U) {
             if (xSemaphoreTake(s_cam.frame_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-                memcpy(s_cam.latest_frame, s_cam.capture_bufs[vb.index], s_cam.buf_size);
+                if (s_cam.downscale) {
+                    downscale_rgb565_half(s_cam.capture_bufs[vb.index], s_cam.latest_frame,
+                                          s_cam.width, s_cam.height);
+                } else {
+                    memcpy(s_cam.latest_frame, s_cam.capture_bufs[vb.index], s_cam.out_size);
+                }
                 s_cam.have_frame = true;
                 xSemaphoreGive(s_cam.frame_mutex);
             }
@@ -191,11 +399,50 @@ static void stream_task(void *arg)
             motion_detect(s_cam.capture_bufs[vb.index]);
         }
 
+        /* V4L2 USERPTR requeue: VIDIOC_DQBUF fills index/bytesused but leaves
+         * m.userptr and length untouched, so restore them or QBUF rejects the
+         * buffer (ESP_ERR_INVALID_ARG) and the stream stalls after 1 frame. */
+        vb.m.userptr = (unsigned long)s_cam.capture_bufs[vb.index];
+        vb.length = s_cam.buf_size;
+
         if (ioctl(s_cam.fd, VIDIOC_QBUF, &vb) != 0) {
-            ESP_LOGW(TAG_CAMERA, "Failed to requeue camera buffer");
+            ESP_LOGW(TAG_CAMERA, "Failed to requeue camera buffer (errno=%d)", errno);
         }
     }
 
+    vTaskDelete(NULL);
+}
+
+/* Frame-arrival watchdog: VIDIOC_DQBUF blocks forever when the CSI pipeline
+ * delivers nothing, so it can never report the "no frames" condition.  This
+ * task samples the frame counter and, if it has not advanced, logs the state
+ * plus the internal-DMA heap (the resource ESP-Hosted WiFi is starving) so we
+ * can see exactly what the pipeline is stuck on.  It self-terminates. */
+static void frame_watchdog_task(void *arg)
+{
+    (void)arg;
+    const uint32_t check_ms = 3000;
+    uint32_t prev_counter = s_cam.frame_counter;
+
+    for (int round = 0; round < 4 && !s_cam.stop_requested; round++) {
+        vTaskDelay(pdMS_TO_TICKS(check_ms));
+        if (s_cam.stop_requested) {
+            break;
+        }
+
+        const uint32_t counter = s_cam.frame_counter;
+        if (counter == 0) {
+            ESP_LOGW(TAG_CAMERA, "Camera no frames after %" PRIu32 "s (streaming but DQBUF blocking)",
+                     (uint32_t)((round + 1) * check_ms / 1000));
+            log_camera_heap("no-frame heap");
+        } else if (counter == prev_counter) {
+            ESP_LOGW(TAG_CAMERA, "Camera stream stalled (frame_counter=%" PRIu32 ")", counter);
+            log_camera_heap("stall heap");
+        }
+        prev_counter = counter;
+    }
+
+    s_cam.watchdog_task = NULL;
     vTaskDelete(NULL);
 }
 
@@ -219,6 +466,9 @@ static esp_err_t open_device(void)
 
     s_cam.width = fmt.fmt.pix.width;
     s_cam.height = fmt.fmt.pix.height;
+    s_cam.out_width = s_cam.downscale ? (s_cam.width / 2) : s_cam.width;
+    s_cam.out_height = s_cam.downscale ? (s_cam.height / 2) : s_cam.height;
+    s_cam.out_size = (size_t)s_cam.out_width * s_cam.out_height * 2;
 
     if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB565) {
         struct v4l2_format request = {
@@ -237,8 +487,9 @@ static esp_err_t open_device(void)
     s_cam.buf_size = (size_t)s_cam.width * s_cam.height * 2;
     s_cam.fd = fd;
 
-    ESP_LOGI(TAG_CAMERA, "Camera opened: %" PRIu32 "x%" PRIu32 " RGB565 (%u bytes/frame)",
-             s_cam.width, s_cam.height, (unsigned)s_cam.buf_size);
+    ESP_LOGI(TAG_CAMERA, "Camera opened: %" PRIu32 "x%" PRIu32 " RGB565 (%u bytes/frame), output %" PRIu32 "x%" PRIu32,
+             s_cam.width, s_cam.height, (unsigned)s_cam.buf_size,
+             s_cam.out_width, s_cam.out_height);
 
     return ESP_OK;
 }
@@ -309,7 +560,7 @@ static esp_err_t setup_jpeg(void)
     };
     size_t allocated = 0;
     /* RGB565 -> JPEG at quality <= 95 compresses well under 4:1. */
-    const size_t want = (s_cam.buf_size / 4) + 4096;
+    const size_t want = (s_cam.out_size / 4) + 4096;
     s_cam.jpeg_out = jpeg_alloc_encoder_mem(want, &out_cfg, &allocated);
     if (s_cam.jpeg_out == NULL) {
         ESP_LOGE(TAG_CAMERA, "jpeg_alloc_encoder_mem failed");
@@ -367,7 +618,7 @@ esp_err_t local_camera_start(void)
     }
 
     const size_t cache_line = 64;
-    s_cam.latest_frame = heap_caps_aligned_calloc(cache_line, 1, s_cam.buf_size, MALLOC_CAP_SPIRAM);
+    s_cam.latest_frame = heap_caps_aligned_calloc(cache_line, 1, s_cam.out_size, MALLOC_CAP_SPIRAM);
     if (s_cam.latest_frame == NULL) {
         ESP_LOGE(TAG_CAMERA, "Failed to allocate latest-frame buffer");
         goto fail;
@@ -406,12 +657,24 @@ esp_err_t local_camera_start(void)
         goto fail;
     }
 
+    /* Reset the motion detector's per-session state; the tuning itself
+     * (threshold/cooldown/zones/…) persists in s_cam across restarts. */
+    s_cam.motion_started_at_ms = now_ms();
+    s_cam.motion_active_since_ms = 0;
+
     s_cam.stop_requested = false;
     if (xTaskCreatePinnedToCore(stream_task, "local_camera", LOCAL_CAMERA_STACK_SIZE, NULL,
                                 LOCAL_CAMERA_TASK_PRIORITY, &s_cam.task, LOCAL_CAMERA_TASK_CORE) != pdPASS) {
         ESP_LOGE(TAG_CAMERA, "Failed to create stream task");
         s_cam.task = NULL;
         goto fail;
+    }
+
+    if (xTaskCreatePinnedToCore(frame_watchdog_task, "cam_watchdog", 2048, NULL,
+                                LOCAL_CAMERA_TASK_PRIORITY - 1, &s_cam.watchdog_task,
+                                LOCAL_CAMERA_TASK_CORE) != pdPASS) {
+        /* Non-fatal: the diagnostic watchdog is optional. */
+        s_cam.watchdog_task = NULL;
     }
 
     ESP_LOGI(TAG_CAMERA, "Local camera started (%" PRIu32 "x%" PRIu32 ")", s_cam.width, s_cam.height);
@@ -437,8 +700,15 @@ esp_err_t local_camera_stop(void)
         ioctl(s_cam.fd, VIDIOC_STREAMOFF, &type);
     }
 
-    /* The task deletes itself; clear the handle. */
+    /* The stream task deletes itself; clear the handle. */
     s_cam.task = NULL;
+
+    /* The watchdog self-terminates, but delete it eagerly so a fast restart
+     * cannot overlap two watchdogs. */
+    if (s_cam.watchdog_task != NULL) {
+        vTaskDelete(s_cam.watchdog_task);
+        s_cam.watchdog_task = NULL;
+    }
     return ESP_OK;
 }
 
@@ -478,6 +748,13 @@ void local_camera_deinit(void)
         s_cam.fd = -1;
     }
     s_cam.have_frame = false;
+
+    /* Tear down the esp_video CSI/ISP device tree. Without this the ISP
+     * device stays registered and a later local_camera_start() fails with
+     * "video name=ISP id=20 has been registered", so the camera could only
+     * ever be started once per boot (resolution change / enable-disable
+     * cycles would never come back up). */
+    esp_video_deinit();
 }
 
 bool local_camera_is_running(void)
@@ -499,6 +776,85 @@ void local_camera_set_motion_threshold(uint8_t threshold)
         threshold = 64;
     }
     s_cam.motion_threshold = threshold;
+}
+
+static uint8_t motion_clamp_zone_byte(uint8_t v, uint8_t max)
+{
+    return v > max ? max : v;
+}
+
+void local_camera_set_motion_config(const local_camera_motion_config_t *config)
+{
+    if (config == NULL) {
+        return;
+    }
+
+    uint8_t threshold = config->threshold;
+    if (threshold < 1) {
+        threshold = 1;
+    }
+    if (threshold > 64) {
+        threshold = 64;
+    }
+    s_cam.motion_threshold = threshold;
+
+    s_cam.motion_min_area_pct = config->min_area_pct > 100 ? 100 : config->min_area_pct;
+    s_cam.motion_min_duration_ms = config->min_duration_ms > 1000 ? 1000 : config->min_duration_ms;
+    s_cam.motion_cooldown_ms = config->cooldown_ms > 30000 ? 30000 : config->cooldown_ms;
+    s_cam.motion_start_delay_ms = config->start_delay_ms > 10000 ? 10000 : config->start_delay_ms;
+    s_cam.motion_ignore_lighting = config->ignore_lighting;
+
+    s_cam.motion_zone_count = config->zone_count > LOCAL_CAMERA_MOTION_MAX_ZONES
+                                  ? LOCAL_CAMERA_MOTION_MAX_ZONES
+                                  : config->zone_count;
+    for (uint8_t z = 0; z < LOCAL_CAMERA_MOTION_MAX_ZONES; z++) {
+        s_cam.motion_zones[z].x = motion_clamp_zone_byte(config->zones[z].x, 100);
+        s_cam.motion_zones[z].y = motion_clamp_zone_byte(config->zones[z].y, 100);
+        s_cam.motion_zones[z].w = motion_clamp_zone_byte(config->zones[z].w, 100);
+        s_cam.motion_zones[z].h = motion_clamp_zone_byte(config->zones[z].h, 100);
+    }
+
+    motion_rebuild_zone_mask();
+    /* A changed zone layout invalidates any in-progress debounce window. */
+    s_cam.motion_active_since_ms = 0;
+}
+
+void local_camera_get_motion_config(local_camera_motion_config_t *config)
+{
+    if (config == NULL) {
+        return;
+    }
+
+    config->threshold = s_cam.motion_threshold;
+    config->min_area_pct = s_cam.motion_min_area_pct;
+    config->min_duration_ms = s_cam.motion_min_duration_ms;
+    config->cooldown_ms = s_cam.motion_cooldown_ms;
+    config->start_delay_ms = s_cam.motion_start_delay_ms;
+    config->ignore_lighting = s_cam.motion_ignore_lighting;
+    config->zone_count = s_cam.motion_zone_count;
+    for (uint8_t z = 0; z < LOCAL_CAMERA_MOTION_MAX_ZONES; z++) {
+        config->zones[z] = s_cam.motion_zones[z];
+    }
+}
+
+void local_camera_get_motion_status(local_camera_motion_status_t *status)
+{
+    if (status == NULL) {
+        return;
+    }
+
+    status->threshold = s_cam.motion_threshold;
+    status->last_level = s_cam.motion_last_level;
+    status->last_changed_pct = s_cam.motion_last_changed_pct;
+    status->last_ignored_lighting = s_cam.motion_last_ignored_lighting;
+    status->active = (s_cam.motion_active_since_ms != 0);
+    status->trigger_count = s_cam.motion_trigger_count;
+    status->last_trigger_ms = s_cam.last_motion_ms;
+    status->zone_count = s_cam.motion_zone_count;
+    for (uint8_t z = 0; z < LOCAL_CAMERA_MOTION_MAX_ZONES; z++) {
+        status->zone_level[z] = s_cam.motion_zone_level[z];
+        status->zone_changed_pct[z] = s_cam.motion_zone_changed_pct[z];
+    }
 }
 
 void local_camera_set_jpeg_quality(uint8_t quality)
@@ -561,8 +917,8 @@ esp_err_t local_camera_snapshot_jpeg(uint8_t **out_buf, size_t *out_len)
     }
 
     jpeg_encode_cfg_t cfg = {
-        .height = s_cam.height,
-        .width = s_cam.width,
+        .height = s_cam.out_height,
+        .width = s_cam.out_width,
         .src_type = JPEG_ENCODE_IN_FORMAT_RGB565,
         .sub_sample = JPEG_DOWN_SAMPLING_YUV422,
         .image_quality = s_cam.jpeg_quality,
@@ -570,7 +926,7 @@ esp_err_t local_camera_snapshot_jpeg(uint8_t **out_buf, size_t *out_len)
     };
 
     uint32_t out_size = 0;
-    esp_err_t err = jpeg_encoder_process(s_cam.jpeg_engine, &cfg, s_cam.latest_frame, s_cam.buf_size,
+    esp_err_t err = jpeg_encoder_process(s_cam.jpeg_engine, &cfg, s_cam.latest_frame, s_cam.out_size,
                                          s_cam.jpeg_out, s_cam.jpeg_out_size, &out_size);
     xSemaphoreGive(s_cam.frame_mutex);
 
@@ -596,12 +952,96 @@ esp_err_t local_camera_register_motion_cb(local_camera_motion_cb_t cb, void *use
     return ESP_OK;
 }
 
+void local_camera_set_resolution(int resolution)
+{
+    s_cam.downscale = (resolution > 0);
+}
+
+int local_camera_get_resolution(void)
+{
+    return s_cam.downscale ? 1 : 0;
+}
+
 int local_camera_width(void)
 {
-    return (int)s_cam.width;
+    return (int)(s_cam.out_width > 0 ? s_cam.out_width : s_cam.width);
 }
 
 int local_camera_height(void)
 {
-    return (int)s_cam.height;
+    return (int)(s_cam.out_height > 0 ? s_cam.out_height : s_cam.height);
+}
+
+esp_err_t local_camera_apply_settings(bool enabled, bool motion_wake, uint8_t motion_threshold,
+                                      uint8_t jpeg_quality, bool hflip, bool vflip,
+                                      int resolution)
+{
+    const bool want_downscale = (resolution > 0);
+    const bool running = local_camera_is_running();
+
+    /* A resolution change requires a full teardown + restart so the frame
+     * cache and JPEG buffers are reallocated for the new output size. */
+    if (running && (want_downscale != s_cam.downscale)) {
+        local_camera_deinit();
+        s_cam.downscale = want_downscale;
+        s_cam.out_width = 0;
+        s_cam.out_height = 0;
+        s_cam.out_size = 0;
+        /* Fall through: a fresh start below re-creates the pipeline. */
+    } else {
+        s_cam.downscale = want_downscale;
+    }
+
+    esp_err_t err = ESP_OK;
+    if (enabled) {
+        err = local_camera_start();
+        if (err == ESP_OK) {
+            /* local_camera_start() resets parameters to Kconfig defaults, so
+             * re-apply the persisted values on top of the fresh pipeline. */
+            local_camera_register_motion_cb(s_cam.motion_cb, s_cam.motion_user);
+            local_camera_set_motion_wake(motion_wake);
+            local_camera_set_motion_threshold(motion_threshold);
+            local_camera_set_jpeg_quality(jpeg_quality);
+            local_camera_set_flip(hflip, vflip);
+        }
+    } else {
+        /* Disabling must release the pipeline's PSRAM/DMA buffers too, not
+         * just stop the stream task. stop() keeps them allocated so a later
+         * start() is cheap, but leaving them resident while the camera is
+         * disabled wastes ~13 MB and stresses the WiFi DMA heap. */
+        local_camera_deinit();
+    }
+
+    return err;
+}
+
+esp_err_t local_camera_copy_scaled_rgb565(uint8_t *dst, int dst_w, int dst_h)
+{
+    if (dst == NULL || dst_w <= 0 || dst_h <= 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!local_camera_is_running() || !s_cam.have_frame) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (s_cam.latest_frame == NULL || s_cam.out_width == 0 || s_cam.out_height == 0) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xSemaphoreTake(s_cam.frame_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    const uint16_t *src = (const uint16_t *)s_cam.latest_frame;
+    uint16_t *out = (uint16_t *)dst;
+    for (int y = 0; y < dst_h; y++) {
+        const int sy = (int)(((uint64_t)y * s_cam.out_height) / (uint32_t)dst_h);
+        const uint16_t *row = src + (size_t)sy * s_cam.out_width;
+        for (int x = 0; x < dst_w; x++) {
+            const int sx = (int)(((uint64_t)x * s_cam.out_width) / (uint32_t)dst_w);
+            out[(size_t)y * dst_w + x] = row[sx];
+        }
+    }
+
+    xSemaphoreGive(s_cam.frame_mutex);
+    return ESP_OK;
 }

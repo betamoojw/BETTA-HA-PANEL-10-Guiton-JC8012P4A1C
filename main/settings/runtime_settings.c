@@ -11,6 +11,11 @@
 #include "esp_log.h"
 #include "nvs.h"
 
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+#include "camera/local_camera.h"
+#include "esp_video_isp_manual.h"
+#endif
+
 #include "settings/i18n_store.h"
 #include "util/log_tags.h"
 
@@ -137,10 +142,11 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
     cJSON *sd = cJSON_CreateObject();
     cJSON *network = cJSON_CreateObject();
     cJSON *camera = cJSON_CreateObject();
+    cJSON *camera_image = cJSON_CreateObject();
     cJSON *system = cJSON_CreateObject();
     cJSON *audio = cJSON_CreateObject();
     if (root == NULL || wifi == NULL || ha == NULL || time_cfg == NULL || ui == NULL || xiaozhi == NULL ||
-        sd == NULL || network == NULL || camera == NULL || system == NULL || audio == NULL) {
+        sd == NULL || network == NULL || camera == NULL || camera_image == NULL || system == NULL || audio == NULL) {
         cJSON_Delete(root);
         cJSON_Delete(wifi);
         cJSON_Delete(ha);
@@ -150,6 +156,7 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
         cJSON_Delete(sd);
         cJSON_Delete(network);
         cJSON_Delete(camera);
+        cJSON_Delete(camera_image);
         cJSON_Delete(system);
         cJSON_Delete(audio);
         return ESP_ERR_NO_MEM;
@@ -201,6 +208,50 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
     cJSON_AddBoolToObject(camera, "hflip", settings->camera_hflip);
     cJSON_AddBoolToObject(camera, "vflip", settings->camera_vflip);
     cJSON_AddBoolToObject(camera, "stream_enabled", settings->camera_stream_enabled);
+    cJSON_AddNumberToObject(camera, "resolution", settings->camera_resolution);
+
+    cJSON *camera_motion = cJSON_CreateObject();
+    cJSON *motion_zones = cJSON_CreateArray();
+    if (camera_motion != NULL && motion_zones != NULL) {
+        cJSON_AddNumberToObject(camera_motion, "min_area", settings->camera_motion_min_area);
+        cJSON_AddNumberToObject(camera_motion, "min_duration_ms", settings->camera_motion_min_duration_ms);
+        cJSON_AddNumberToObject(camera_motion, "cooldown_ms", settings->camera_motion_cooldown_ms);
+        cJSON_AddNumberToObject(camera_motion, "start_delay_ms", settings->camera_motion_start_delay_ms);
+        cJSON_AddBoolToObject(camera_motion, "ignore_lighting", settings->camera_motion_ignore_lighting);
+        for (int i = 0; i < settings->camera_motion_zone_count && i < 4; i++) {
+            cJSON *zone = cJSON_CreateObject();
+            if (zone == NULL) {
+                break;
+            }
+            cJSON_AddNumberToObject(zone, "x", settings->camera_motion_zones[i].x);
+            cJSON_AddNumberToObject(zone, "y", settings->camera_motion_zones[i].y);
+            cJSON_AddNumberToObject(zone, "w", settings->camera_motion_zones[i].w);
+            cJSON_AddNumberToObject(zone, "h", settings->camera_motion_zones[i].h);
+            cJSON_AddItemToArray(motion_zones, zone);
+        }
+        cJSON_AddItemToObject(camera_motion, "zones", motion_zones);
+        cJSON_AddItemToObject(camera, "motion", camera_motion);
+    } else {
+        cJSON_Delete(camera_motion);
+        cJSON_Delete(motion_zones);
+    }
+
+    cJSON_AddBoolToObject(camera_image, "manual", settings->camera_img_manual);
+    cJSON_AddBoolToObject(camera_image, "wb_manual", settings->camera_img_wb_manual);
+    cJSON_AddBoolToObject(camera_image, "sharpen_manual", settings->camera_img_sharpen_manual);
+    cJSON_AddBoolToObject(camera_image, "denoise_manual", settings->camera_img_denoise_manual);
+    cJSON_AddNumberToObject(camera_image, "brightness", settings->camera_img_brightness);
+    cJSON_AddNumberToObject(camera_image, "contrast", settings->camera_img_contrast);
+    cJSON_AddNumberToObject(camera_image, "saturation", settings->camera_img_saturation);
+    cJSON_AddNumberToObject(camera_image, "hue", settings->camera_img_hue);
+    cJSON_AddNumberToObject(camera_image, "wb_red", settings->camera_img_wb_red);
+    cJSON_AddNumberToObject(camera_image, "wb_blue", settings->camera_img_wb_blue);
+    cJSON_AddNumberToObject(camera_image, "sharpen", settings->camera_img_sharpen);
+    cJSON_AddNumberToObject(camera_image, "denoise", settings->camera_img_denoise);
+    cJSON_AddNumberToObject(camera_image, "tone_shadows", settings->camera_img_tone_shadows);
+    cJSON_AddNumberToObject(camera_image, "tone_highlights", settings->camera_img_tone_highlights);
+    cJSON_AddItemToObject(camera, "image", camera_image);
+
     cJSON_AddItemToObject(root, "camera", camera);
 
     cJSON_AddNumberToObject(system, "daily_restart_hour", settings->daily_restart_hour);
@@ -383,6 +434,60 @@ static esp_err_t parse_settings_json(
         json_copy_bool(camera, "hflip", &out->camera_hflip);
         json_copy_bool(camera, "vflip", &out->camera_vflip);
         json_copy_bool(camera, "stream_enabled", &out->camera_stream_enabled);
+        json_copy_int(camera, "resolution", &out->camera_resolution, 0, 1);
+
+        cJSON *motion = cJSON_GetObjectItemCaseSensitive(camera, "motion");
+        if (cJSON_IsObject(motion)) {
+            json_copy_int(motion, "min_area", &out->camera_motion_min_area, 0, 100);
+            json_copy_int(motion, "min_duration_ms", &out->camera_motion_min_duration_ms, 0, 1000);
+            json_copy_int(motion, "cooldown_ms", &out->camera_motion_cooldown_ms, 0, 30000);
+            json_copy_int(motion, "start_delay_ms", &out->camera_motion_start_delay_ms, 0, 10000);
+            json_copy_bool(motion, "ignore_lighting", &out->camera_motion_ignore_lighting);
+
+            cJSON *zones = cJSON_GetObjectItemCaseSensitive(motion, "zones");
+            if (cJSON_IsArray(zones)) {
+                int count = 0;
+                const int total = cJSON_GetArraySize(zones);
+                for (int i = 0; i < total && count < 4; i++) {
+                    cJSON *zone = cJSON_GetArrayItem(zones, i);
+                    if (!cJSON_IsObject(zone)) {
+                        continue;
+                    }
+                    int x = 0, y = 0, w = 0, h = 0;
+                    json_copy_int(zone, "x", &x, 0, 100);
+                    json_copy_int(zone, "y", &y, 0, 100);
+                    json_copy_int(zone, "w", &w, 0, 100);
+                    json_copy_int(zone, "h", &h, 0, 100);
+                    if (w <= 0 || h <= 0) {
+                        continue;
+                    }
+                    out->camera_motion_zones[count].x = x;
+                    out->camera_motion_zones[count].y = y;
+                    out->camera_motion_zones[count].w = w;
+                    out->camera_motion_zones[count].h = h;
+                    count++;
+                }
+                out->camera_motion_zone_count = count;
+            }
+        }
+
+        cJSON *image = cJSON_GetObjectItemCaseSensitive(camera, "image");
+        if (cJSON_IsObject(image)) {
+            json_copy_bool(image, "manual", &out->camera_img_manual);
+            json_copy_bool(image, "wb_manual", &out->camera_img_wb_manual);
+            json_copy_bool(image, "sharpen_manual", &out->camera_img_sharpen_manual);
+            json_copy_bool(image, "denoise_manual", &out->camera_img_denoise_manual);
+            json_copy_int(image, "brightness", &out->camera_img_brightness, -128, 127);
+            json_copy_int(image, "contrast", &out->camera_img_contrast, 0, 255);
+            json_copy_int(image, "saturation", &out->camera_img_saturation, 0, 255);
+            json_copy_int(image, "hue", &out->camera_img_hue, 0, 360);
+            json_copy_int(image, "wb_red", &out->camera_img_wb_red, 50, 200);
+            json_copy_int(image, "wb_blue", &out->camera_img_wb_blue, 50, 200);
+            json_copy_int(image, "sharpen", &out->camera_img_sharpen, 25, 300);
+            json_copy_int(image, "denoise", &out->camera_img_denoise, 25, 200);
+            json_copy_int(image, "tone_shadows", &out->camera_img_tone_shadows, -100, 100);
+            json_copy_int(image, "tone_highlights", &out->camera_img_tone_highlights, -100, 100);
+        }
     }
 
     if (cJSON_IsObject(system)) {
@@ -574,7 +679,7 @@ void runtime_settings_set_defaults(runtime_settings_t *out)
     out->wifi_static_dns[0] = '\0';
 
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
-    out->camera_enabled = true;
+    out->camera_enabled = false;
     out->camera_motion_wake = CONFIG_APP_LOCAL_CAMERA_MOTION_WAKE;
     out->camera_motion_threshold = 8;
     out->camera_jpeg_quality = CONFIG_APP_LOCAL_CAMERA_JPEG_QUALITY;
@@ -589,6 +694,7 @@ void runtime_settings_set_defaults(runtime_settings_t *out)
     out->camera_vflip = false;
 #endif
     out->camera_stream_enabled = false;
+    out->camera_resolution = 0;
 #else
     out->camera_enabled = false;
     out->camera_motion_wake = false;
@@ -597,7 +703,39 @@ void runtime_settings_set_defaults(runtime_settings_t *out)
     out->camera_hflip = false;
     out->camera_vflip = false;
     out->camera_stream_enabled = false;
+    out->camera_resolution = 0;
 #endif
+
+    /* Motion-detector tuning: whole frame, fire immediately, 1 s cooldown,
+     * 2 s start grace period, global-lighting filter on. */
+    out->camera_motion_min_area = 0;
+    out->camera_motion_min_duration_ms = 0;
+    out->camera_motion_cooldown_ms = 1000;
+    out->camera_motion_start_delay_ms = 2000;
+    out->camera_motion_ignore_lighting = true;
+    out->camera_motion_zone_count = 0;
+    for (int i = 0; i < 4; i++) {
+        out->camera_motion_zones[i].x = 0;
+        out->camera_motion_zones[i].y = 0;
+        out->camera_motion_zones[i].w = 0;
+        out->camera_motion_zones[i].h = 0;
+    }
+
+    /* Manual ISP image calibration: disabled, every slider neutral. */
+    out->camera_img_manual = false;
+    out->camera_img_wb_manual = false;
+    out->camera_img_sharpen_manual = false;
+    out->camera_img_denoise_manual = false;
+    out->camera_img_brightness = 0;
+    out->camera_img_contrast = 128;
+    out->camera_img_saturation = 128;
+    out->camera_img_hue = 0;
+    out->camera_img_wb_red = 100;
+    out->camera_img_wb_blue = 100;
+    out->camera_img_sharpen = 100;
+    out->camera_img_denoise = 100;
+    out->camera_img_tone_shadows = 0;
+    out->camera_img_tone_highlights = 0;
 
     out->sd_flush_interval_s = 30;
     out->sd_log_system_enabled = true;
@@ -655,6 +793,21 @@ esp_err_t runtime_settings_load(runtime_settings_t *out)
     }
     if (has_nvs_ha_access_token) {
         strlcpy(out->ha_access_token, nvs_ha_access_token, sizeof(out->ha_access_token));
+    }
+
+    /* The Xiaozhi token is a secret stored in NVS (never in the public JSON),
+     * so restore it here alongside the other NVS secrets. Without this the
+     * token is empty after every boot, which forces a cloud activation round
+     * trip and races the activation task against xz_xiaozhi_init(). */
+    char nvs_xiaozhi_token[APP_XIAOZHI_TOKEN_MAX_LEN] = {0};
+    bool has_nvs_xiaozhi_token = false;
+    nvs_err = nvs_load_secret(
+        SETTINGS_NVS_KEY_XIAOZHI_TOKEN, nvs_xiaozhi_token, sizeof(nvs_xiaozhi_token), &has_nvs_xiaozhi_token);
+    if (nvs_err != ESP_OK) {
+        return nvs_err;
+    }
+    if (has_nvs_xiaozhi_token) {
+        strlcpy(out->xiaozhi_token, nvs_xiaozhi_token, sizeof(out->xiaozhi_token));
     }
 
     bool migrate_to_nvs =
@@ -732,4 +885,78 @@ bool runtime_settings_has_ha(const runtime_settings_t *settings)
 bool runtime_settings_has_xiaozhi(const runtime_settings_t *settings)
 {
     return settings != NULL && settings->xiaozhi_enabled && settings->xiaozhi_server[0] != '\0';
+}
+
+esp_err_t runtime_settings_apply_image_calibration(const runtime_settings_t *settings)
+{
+    if (settings == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    esp_video_isp_manual_t calibration = ESP_VIDEO_ISP_MANUAL_NEUTRAL();
+
+    if (settings->camera_img_manual) {
+        calibration.blocks |= ESP_VIDEO_ISP_MANUAL_BRIGHTNESS | ESP_VIDEO_ISP_MANUAL_CONTRAST |
+                              ESP_VIDEO_ISP_MANUAL_SATURATION | ESP_VIDEO_ISP_MANUAL_HUE |
+                              ESP_VIDEO_ISP_MANUAL_TONE;
+        calibration.brightness = settings->camera_img_brightness;
+        calibration.contrast = (uint32_t)settings->camera_img_contrast;
+        calibration.saturation = (uint32_t)settings->camera_img_saturation;
+        calibration.hue = (uint32_t)settings->camera_img_hue;
+        calibration.tone_shadows = (float)settings->camera_img_tone_shadows / 100.0f;
+        calibration.tone_highlights = (float)settings->camera_img_tone_highlights / 100.0f;
+    }
+    if (settings->camera_img_manual && settings->camera_img_wb_manual) {
+        calibration.blocks |= ESP_VIDEO_ISP_MANUAL_WB;
+        calibration.wb_red_gain = (float)settings->camera_img_wb_red / 100.0f;
+        calibration.wb_blue_gain = (float)settings->camera_img_wb_blue / 100.0f;
+    }
+    if (settings->camera_img_manual && settings->camera_img_sharpen_manual) {
+        calibration.blocks |= ESP_VIDEO_ISP_MANUAL_SHARPEN;
+        calibration.sharpen_gain = (float)settings->camera_img_sharpen / 100.0f;
+    }
+    if (settings->camera_img_manual && settings->camera_img_denoise_manual) {
+        calibration.blocks |= ESP_VIDEO_ISP_MANUAL_DENOISE;
+        calibration.denoise_scale = (float)settings->camera_img_denoise / 100.0f;
+    }
+
+    esp_err_t err = esp_video_isp_manual_set(&calibration);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG_APP, "Failed to apply image calibration: %s", esp_err_to_name(err));
+    }
+    return err;
+#else
+    return ESP_OK;
+#endif
+}
+
+esp_err_t runtime_settings_apply_motion_config(const runtime_settings_t *settings)
+{
+    if (settings == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    local_camera_motion_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.threshold = (uint8_t)settings->camera_motion_threshold;
+    config.min_area_pct = (uint8_t)settings->camera_motion_min_area;
+    config.min_duration_ms = (uint16_t)settings->camera_motion_min_duration_ms;
+    config.cooldown_ms = (uint16_t)settings->camera_motion_cooldown_ms;
+    config.start_delay_ms = (uint16_t)settings->camera_motion_start_delay_ms;
+    config.ignore_lighting = settings->camera_motion_ignore_lighting;
+    config.zone_count = (uint8_t)settings->camera_motion_zone_count;
+    for (int i = 0; i < 4; i++) {
+        config.zones[i].x = (uint8_t)settings->camera_motion_zones[i].x;
+        config.zones[i].y = (uint8_t)settings->camera_motion_zones[i].y;
+        config.zones[i].w = (uint8_t)settings->camera_motion_zones[i].w;
+        config.zones[i].h = (uint8_t)settings->camera_motion_zones[i].h;
+    }
+
+    local_camera_set_motion_config(&config);
+    return ESP_OK;
+#else
+    return ESP_OK;
+#endif
 }

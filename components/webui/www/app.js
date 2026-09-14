@@ -303,6 +303,7 @@ const SETTINGS_NAV_ITEMS = [
   { sectionId: "settingsXiaozhiSection", headingId: "settingsXiaozhiHeading", labelKey: "settings.xiaozhi.heading", feature: "xiaozhi" },
   { sectionId: "settingsSdSection", headingId: "settingsSdHeading", labelKey: "settings.sd.heading" },
   { sectionId: "settingsCamerasSection", headingId: "settingsCamerasHeading", labelKey: "settings.cameras.heading", feature: "cameras" },
+  { sectionId: "settingsLocalCamSection", headingId: "settingsLocalCamHeading", labelKey: "settings.localCam.heading", feature: "local_camera" },
   { sectionId: "settingsTimeSection", headingId: "settingsTimeHeading", labelKey: "settings.time.heading" },
   { sectionId: "settingsUiSection", headingId: "settingsUiHeading", labelKey: "settings.ui.heading" },
   { sectionId: "settingsDisplaySection", headingId: "settingsDisplayHeading", labelKey: "settings.display.heading" },
@@ -683,6 +684,62 @@ const WEB_I18N_BUILTIN = {
     "settings.cameras.entity_loading": "Loading cameras...",
     "settings.cameras.invalid_entity": "Select a camera.* entity",
     "settings.cameras.delete_confirm": "Delete camera \"{name}\"?",
+    "settings.localCam.heading": "Built-in camera",
+    "settings.localCam.hint": "Built-in OV02C10 MIPI-CSI camera. Changes apply immediately, no reboot needed.",
+    "settings.localCam.enabled": "Camera enabled",
+    "settings.localCam.stream": "Live stream to HA (MJPEG)",
+    "settings.localCam.motion": "Motion detection (wake screen)",
+    "settings.localCam.threshold": "Motion sensitivity (1..64, lower = more sensitive)",
+    "settings.localCam.quality": "JPEG quality (10..95)",
+    "settings.localCam.resolution": "Resolution",
+    "settings.localCam.resolution_full_hd": "Full HD (1920x1080)",
+    "settings.localCam.resolution_hd_ready": "HD Ready (960x540)",
+    "settings.localCam.hflip": "Flip horizontal (H)",
+    "settings.localCam.vflip": "Flip vertical (V)",
+    "settings.localCam.save": "Save",
+    "settings.localCam.refresh_preview": "Refresh preview",
+    "settings.localCam.preview_hint": "Preview works while the camera is enabled.",
+    "settings.localCam.saved": "Camera settings saved.",
+    "settings.localCam.save_failed": "Save failed: {error}",
+    "settings.localCam.status_error": "Failed to load camera status: {error}",
+    "settings.localCam.snapshot_failed": "Snapshot failed: {error}",
+    "settings.localCam.motion_heading": "Motion detection",
+    "settings.localCam.motion_hint": "Zones and thresholds for motion detection. Coordinates in % of frame (x, y from top-left).",
+    "settings.localCam.motion_min_area": "Min. changed area (%)",
+    "settings.localCam.motion_min_duration": "Min. motion duration (ms, 0 = off)",
+    "settings.localCam.motion_cooldown": "Cooldown between detections (ms)",
+    "settings.localCam.motion_start_delay": "Delay after camera start (ms)",
+    "settings.localCam.motion_ignore_lighting": "Ignore sudden lighting changes",
+    "settings.localCam.zones_hint": "Drag on the preview to draw a zone (max 4). No zones = whole frame.",
+    "settings.localCam.zones_refresh": "Refresh zone preview",
+    "settings.localCam.zones_clear": "Clear zones",
+    "settings.localCam.motion_diag": "Check detection",
+    "settings.localCam.motion_level": "Level",
+    "settings.localCam.motion_changed": "changed",
+    "settings.localCam.motion_active": "Motion",
+    "settings.localCam.motion_triggers": "triggers",
+    "settings.localCam.motion_lighting": "lighting ignored",
+    "settings.localCam.motion_diag_failed": "Detection check failed: {error}",
+    "settings.localCam.img_heading": "Image calibration (ISP)",
+    "settings.localCam.img_hint": "Manual calibration applies immediately, no reboot needed. 100% = automatic value.",
+    "settings.localCam.img_manual": "Manual calibration",
+    "settings.localCam.img_auto_wb": "Auto white balance",
+    "settings.localCam.img_auto_sharpen": "Auto sharpness",
+    "settings.localCam.img_auto_denoise": "Auto denoise",
+    "settings.localCam.img_brightness": "Brightness",
+    "settings.localCam.img_contrast": "Contrast (128 = neutral)",
+    "settings.localCam.img_saturation": "Saturation (128 = neutral)",
+    "settings.localCam.img_hue": "Hue",
+    "settings.localCam.img_tone_shadows": "Tone - shadows",
+    "settings.localCam.img_tone_highlights": "Tone - highlights",
+    "settings.localCam.img_wb_red": "White balance - red",
+    "settings.localCam.img_wb_blue": "White balance - blue",
+    "settings.localCam.img_sharpen": "Sharpness",
+    "settings.localCam.img_denoise": "Denoise",
+    "settings.localCam.img_apply": "Apply calibration",
+    "settings.localCam.img_reset": "Reset (neutral)",
+    "settings.localCam.img_applied": "Image calibration applied.",
+    "settings.localCam.img_apply_failed": "Calibration failed: {error}",
     "settings.time.heading": "Time",
     "settings.time.ntp_server": "NTP Server",
     "settings.time.timezone": "Timezone (POSIX TZ)",
@@ -699,10 +756,13 @@ const WEB_I18N_BUILTIN = {
     "settings.display.screensaver_enabled": "Screen saver (clock + graphic instead of full off)",
     "settings.display.screensaver_clock": "Show clock on screen saver",
     "settings.display.screensaver_wallpaper_upload": "Upload wallpaper",
-    "settings.display.screensaver_wallpaper_info": "PNG/JPG uploaded to the SD card (/sdcard/bg/screensaver.png).",
+    "settings.display.screensaver_wallpaper_info": "PNG saved to the SD card. Choose it from the list below and save settings to keep it.",
     "settings.display.screensaver_wallpaper_ok": "Wallpaper uploaded.",
     "settings.display.screensaver_wallpaper_fail": "Upload failed: {error}",
-    "settings.display.screensaver_wallpaper_no_file": "Select a PNG/JPG file first.",
+    "settings.display.screensaver_wallpaper_no_file": "Select a PNG file first.",
+    "settings.display.screensaver_wallpaper_png_only": "Screensaver wallpapers must be PNG files.",
+    "settings.display.screensaver_wallpaper_select": "Wallpaper (from SD card)",
+    "settings.display.screensaver_wallpaper_default": "Default (screensaver.png)",
     "settings.display.screensaver_brightness": "Screensaver brightness (%)",
     "settings.display.active_brightness": "Active brightness (%)",
     "settings.display.dim_brightness": "Dim brightness (%)",
@@ -2162,6 +2222,62 @@ const WEB_I18N_BUILTIN = {
     "settings.cameras.entity_loading": "Wczytywanie kamer...",
     "settings.cameras.invalid_entity": "Wybierz encję camera.*",
     "settings.cameras.delete_confirm": "Usunąć kamerę \"{name}\"?",
+    "settings.localCam.heading": "Zintegrowana kamera",
+    "settings.localCam.hint": "Wbudowana kamera OV02C10 (MIPI-CSI). Ustawienia są stosowane natychmiast, bez restartu panelu.",
+    "settings.localCam.enabled": "Kamera włączona",
+    "settings.localCam.stream": "Transmisja na żywo do HA (MJPEG)",
+    "settings.localCam.motion": "Wykrywanie ruchu (budzenie ekranu)",
+    "settings.localCam.threshold": "Czułość detekcji ruchu (1..64, mniej = czulej)",
+    "settings.localCam.quality": "Jakość JPEG (10..95)",
+    "settings.localCam.resolution": "Rozdzielczość",
+    "settings.localCam.resolution_full_hd": "Full HD (1920x1080)",
+    "settings.localCam.resolution_hd_ready": "HD Ready (960x540)",
+    "settings.localCam.hflip": "Odbicie poziome (H)",
+    "settings.localCam.vflip": "Odbicie pionowe (V)",
+    "settings.localCam.save": "Zapisz",
+    "settings.localCam.refresh_preview": "Odśwież podgląd",
+    "settings.localCam.preview_hint": "Podgląd działa, gdy kamera jest włączona.",
+    "settings.localCam.saved": "Ustawienia kamery zapisane.",
+    "settings.localCam.save_failed": "Nie udało się zapisać: {error}",
+    "settings.localCam.status_error": "Nie udało się wczytać statusu kamery: {error}",
+    "settings.localCam.snapshot_failed": "Migawka nie powiodła się: {error}",
+    "settings.localCam.motion_heading": "Detekcja ruchu",
+    "settings.localCam.motion_hint": "Strefy i progi detekcji ruchu. Współrzędne w % kadru (x, y od lewego górnego rogu).",
+    "settings.localCam.motion_min_area": "Min. obszar zmiany (%)",
+    "settings.localCam.motion_min_duration": "Min. czas trwania ruchu (ms, 0 = wył.)",
+    "settings.localCam.motion_cooldown": "Odstęp między wykryciami (ms)",
+    "settings.localCam.motion_start_delay": "Opóźnienie po starcie kamery (ms)",
+    "settings.localCam.motion_ignore_lighting": "Ignoruj nagłą zmianę oświetlenia",
+    "settings.localCam.zones_hint": "Zaznacz strefę przeciągając po podglądzie (max 4). Bez stref = cały kadr.",
+    "settings.localCam.zones_refresh": "Odśwież podgląd stref",
+    "settings.localCam.zones_clear": "Wyczyść strefy",
+    "settings.localCam.motion_diag": "Sprawdź detekcję",
+    "settings.localCam.motion_level": "Poziom",
+    "settings.localCam.motion_changed": "zmiana",
+    "settings.localCam.motion_active": "Ruch",
+    "settings.localCam.motion_triggers": "wykryć",
+    "settings.localCam.motion_lighting": "oświetlenie zignorowane",
+    "settings.localCam.motion_diag_failed": "Sprawdzenie detekcji nie powiodło się: {error}",
+    "settings.localCam.img_heading": "Kalibracja obrazu (ISP)",
+    "settings.localCam.img_hint": "Kalibracja manualna działa natychmiast, bez restartu panelu. 100% = wartość automatyczna.",
+    "settings.localCam.img_manual": "Kalibracja manualna",
+    "settings.localCam.img_auto_wb": "Auto balans bieli",
+    "settings.localCam.img_auto_sharpen": "Auto ostrość",
+    "settings.localCam.img_auto_denoise": "Auto odszumianie",
+    "settings.localCam.img_brightness": "Jasność",
+    "settings.localCam.img_contrast": "Kontrast (128 = neutralny)",
+    "settings.localCam.img_saturation": "Nasycenie (128 = neutralne)",
+    "settings.localCam.img_hue": "Barwa (hue)",
+    "settings.localCam.img_tone_shadows": "Ton - cienie",
+    "settings.localCam.img_tone_highlights": "Ton - światła",
+    "settings.localCam.img_wb_red": "Balans bieli - czerwony",
+    "settings.localCam.img_wb_blue": "Balans bieli - niebieski",
+    "settings.localCam.img_sharpen": "Ostrość",
+    "settings.localCam.img_denoise": "Odszumianie",
+    "settings.localCam.img_apply": "Zastosuj kalibrację",
+    "settings.localCam.img_reset": "Reset (neutralne)",
+    "settings.localCam.img_applied": "Kalibracja obrazu zastosowana.",
+    "settings.localCam.img_apply_failed": "Kalibracja nie powiodła się: {error}",
     "settings.time.heading": "Czas",
     "settings.time.ntp_server": "Serwer NTP",
     "settings.time.timezone": "Strefa czasowa (POSIX TZ)",
@@ -2179,10 +2295,13 @@ const WEB_I18N_BUILTIN = {
     "settings.display.screensaver_enabled": "Wygaszacz ekranu (zegar + grafika zamiast pełnego wyłączenia)",
     "settings.display.screensaver_clock": "Pokaż zegar na wygaszaczu",
     "settings.display.screensaver_wallpaper_upload": "Wgraj tapetę",
-    "settings.display.screensaver_wallpaper_info": "PNG/JPG wgrane na kartę SD (/sdcard/bg/screensaver.png).",
+    "settings.display.screensaver_wallpaper_info": "PNG zapisany na karcie SD. Wybierz go z listy poniżej i zapisz ustawienia, aby go zachować.",
     "settings.display.screensaver_wallpaper_ok": "Tapeta wgrana.",
     "settings.display.screensaver_wallpaper_fail": "Wgranie nie powiodło się: {error}",
-    "settings.display.screensaver_wallpaper_no_file": "Najpierw wybierz plik PNG/JPG.",
+    "settings.display.screensaver_wallpaper_no_file": "Najpierw wybierz plik PNG.",
+    "settings.display.screensaver_wallpaper_png_only": "Tapety wygaszacza muszą być plikami PNG.",
+    "settings.display.screensaver_wallpaper_select": "Tapeta (z karty SD)",
+    "settings.display.screensaver_wallpaper_default": "Domyślna (screensaver.png)",
     "settings.display.screensaver_brightness": "Jasność wygaszacza (%)",
     "settings.display.active_brightness": "Jasność aktywna (%)",
     "settings.display.dim_brightness": "Jasność przyciemnienia (%)",
@@ -2434,6 +2553,8 @@ const editor = {
   entities: [],
   states: new Map(),
   energySnapshot: null,
+  localCamZones: [],
+  localCamZoneDraft: null,
   selectedPageId: null,
   selectedWidgetId: null,
   activePane: "layout",
@@ -2724,6 +2845,48 @@ const el = {
   camerasSaveBtn: document.getElementById("camerasSaveBtn"),
   camerasDeleteBtn: document.getElementById("camerasDeleteBtn"),
   camerasInfo: document.getElementById("camerasInfo"),
+  settingsLocalCamEnabled: document.getElementById("settingsLocalCamEnabled"),
+  settingsLocalCamStream: document.getElementById("settingsLocalCamStream"),
+  settingsLocalCamMotion: document.getElementById("settingsLocalCamMotion"),
+  settingsLocalCamHflip: document.getElementById("settingsLocalCamHflip"),
+  settingsLocalCamVflip: document.getElementById("settingsLocalCamVflip"),
+  settingsLocalCamThreshold: document.getElementById("settingsLocalCamThreshold"),
+  settingsLocalCamQuality: document.getElementById("settingsLocalCamQuality"),
+  settingsLocalCamResolution: document.getElementById("settingsLocalCamResolution"),
+  settingsLocalCamSnapshot: document.getElementById("settingsLocalCamSnapshot"),
+  settingsLocalCamSnapshotBtn: document.getElementById("settingsLocalCamSnapshotBtn"),
+  settingsLocalCamStatus: document.getElementById("settingsLocalCamStatus"),
+  settingsLocalCamSaveBtn: document.getElementById("settingsLocalCamSaveBtn"),
+  settingsLocalCamMotionMinArea: document.getElementById("settingsLocalCamMotionMinArea"),
+  settingsLocalCamMotionMinAreaVal: document.getElementById("settingsLocalCamMotionMinAreaVal"),
+  settingsLocalCamMotionMinDuration: document.getElementById("settingsLocalCamMotionMinDuration"),
+  settingsLocalCamMotionCooldown: document.getElementById("settingsLocalCamMotionCooldown"),
+  settingsLocalCamMotionStartDelay: document.getElementById("settingsLocalCamMotionStartDelay"),
+  settingsLocalCamMotionIgnoreLighting: document.getElementById("settingsLocalCamMotionIgnoreLighting"),
+  settingsLocalCamZonesWrap: document.getElementById("settingsLocalCamZonesWrap"),
+  settingsLocalCamZonesSnapshot: document.getElementById("settingsLocalCamZonesSnapshot"),
+  settingsLocalCamZonesOverlay: document.getElementById("settingsLocalCamZonesOverlay"),
+  settingsLocalCamZonesList: document.getElementById("settingsLocalCamZonesList"),
+  settingsLocalCamZonesSnapshotBtn: document.getElementById("settingsLocalCamZonesSnapshotBtn"),
+  settingsLocalCamZonesClearBtn: document.getElementById("settingsLocalCamZonesClearBtn"),
+  settingsLocalCamMotionDiag: document.getElementById("settingsLocalCamMotionDiag"),
+  settingsLocalCamMotionDiagBtn: document.getElementById("settingsLocalCamMotionDiagBtn"),
+  settingsLocalCamImgManual: document.getElementById("settingsLocalCamImgManual"),
+  settingsLocalCamImgAutoWb: document.getElementById("settingsLocalCamImgAutoWb"),
+  settingsLocalCamImgAutoSharpen: document.getElementById("settingsLocalCamImgAutoSharpen"),
+  settingsLocalCamImgAutoDenoise: document.getElementById("settingsLocalCamImgAutoDenoise"),
+  settingsLocalCamImgBrightness: document.getElementById("settingsLocalCamImgBrightness"),
+  settingsLocalCamImgContrast: document.getElementById("settingsLocalCamImgContrast"),
+  settingsLocalCamImgSaturation: document.getElementById("settingsLocalCamImgSaturation"),
+  settingsLocalCamImgHue: document.getElementById("settingsLocalCamImgHue"),
+  settingsLocalCamImgToneShadows: document.getElementById("settingsLocalCamImgToneShadows"),
+  settingsLocalCamImgToneHighlights: document.getElementById("settingsLocalCamImgToneHighlights"),
+  settingsLocalCamImgWbRed: document.getElementById("settingsLocalCamImgWbRed"),
+  settingsLocalCamImgWbBlue: document.getElementById("settingsLocalCamImgWbBlue"),
+  settingsLocalCamImgSharpen: document.getElementById("settingsLocalCamImgSharpen"),
+  settingsLocalCamImgDenoise: document.getElementById("settingsLocalCamImgDenoise"),
+  settingsLocalCamImgApplyBtn: document.getElementById("settingsLocalCamImgApplyBtn"),
+  settingsLocalCamImgResetBtn: document.getElementById("settingsLocalCamImgResetBtn"),
   settingsNtpServer: document.getElementById("settingsNtpServer"),
   settingsTimezone: document.getElementById("settingsTimezone"),
   settingsLanguage: document.getElementById("settingsLanguage"),
@@ -2733,8 +2896,10 @@ const el = {
   restartDeviceBtn: document.getElementById("restartDeviceBtn"),
   settingsScreensaverEnabled: document.getElementById("settingsScreensaverEnabled"),
   settingsScreensaverClock: document.getElementById("settingsScreensaverClock"),
+  settingsScreensaverWallpaperName: document.getElementById("settingsScreensaverWallpaperName"),
   settingsScreensaverWallpaperFile: document.getElementById("settingsScreensaverWallpaperFile"),
   settingsScreensaverWallpaperUploadBtn: document.getElementById("settingsScreensaverWallpaperUploadBtn"),
+  settingsScreensaverWallpaperSelect: document.getElementById("settingsScreensaverWallpaperSelect"),
   settingsScreensaverWallpaperInfo: document.getElementById("settingsScreensaverWallpaperInfo"),
   settingsScreensaverBrightness: document.getElementById("settingsScreensaverBrightness"),
   settingsActiveBrightness: document.getElementById("settingsActiveBrightness"),
@@ -3557,6 +3722,51 @@ function applyWebTranslations() {
   setTextById("camerasSaveBtn", "settings.cameras.save");
   setTextById("camerasDeleteBtn", "settings.cameras.delete");
 
+  setTextById("settingsLocalCamHeading", "settings.localCam.heading");
+  setTextById("settingsLocalCamHint", "settings.localCam.hint");
+  setTextById("settingsLocalCamEnabledLabel", "settings.localCam.enabled");
+  setTextById("settingsLocalCamStreamLabel", "settings.localCam.stream");
+  setTextById("settingsLocalCamMotionLabel", "settings.localCam.motion");
+  setTextById("settingsLocalCamThresholdLabel", "settings.localCam.threshold");
+  setTextById("settingsLocalCamQualityLabel", "settings.localCam.quality");
+  setTextById("settingsLocalCamResolutionLabel", "settings.localCam.resolution");
+  setTextById("settingsLocalCamResolutionFullHdOption", "settings.localCam.resolution_full_hd");
+  setTextById("settingsLocalCamResolutionHdReadyOption", "settings.localCam.resolution_hd_ready");
+  setTextById("settingsLocalCamHflipLabel", "settings.localCam.hflip");
+  setTextById("settingsLocalCamVflipLabel", "settings.localCam.vflip");
+  setTextById("settingsLocalCamSaveBtn", "settings.localCam.save");
+  setTextById("settingsLocalCamSnapshotBtn", "settings.localCam.refresh_preview");
+  setTextById("settingsLocalCamSnapshotHint", "settings.localCam.preview_hint");
+  setTextById("settingsLocalCamMotionHeading", "settings.localCam.motion_heading");
+  setTextById("settingsLocalCamMotionHint", "settings.localCam.motion_hint");
+  setTextById("settingsLocalCamMotionMinAreaLabel", "settings.localCam.motion_min_area");
+  setTextById("settingsLocalCamMotionMinDurationLabel", "settings.localCam.motion_min_duration");
+  setTextById("settingsLocalCamMotionCooldownLabel", "settings.localCam.motion_cooldown");
+  setTextById("settingsLocalCamMotionStartDelayLabel", "settings.localCam.motion_start_delay");
+  setTextById("settingsLocalCamMotionIgnoreLightingLabel", "settings.localCam.motion_ignore_lighting");
+  setTextById("settingsLocalCamZonesHint", "settings.localCam.zones_hint");
+  setTextById("settingsLocalCamZonesSnapshotBtn", "settings.localCam.zones_refresh");
+  setTextById("settingsLocalCamZonesClearBtn", "settings.localCam.zones_clear");
+  setTextById("settingsLocalCamMotionDiagBtn", "settings.localCam.motion_diag");
+  setTextById("settingsLocalCamImgHeading", "settings.localCam.img_heading");
+  setTextById("settingsLocalCamImgHint", "settings.localCam.img_hint");
+  setTextById("settingsLocalCamImgManualLabel", "settings.localCam.img_manual");
+  setTextById("settingsLocalCamImgAutoWbLabel", "settings.localCam.img_auto_wb");
+  setTextById("settingsLocalCamImgAutoSharpenLabel", "settings.localCam.img_auto_sharpen");
+  setTextById("settingsLocalCamImgAutoDenoiseLabel", "settings.localCam.img_auto_denoise");
+  setTextById("settingsLocalCamImgBrightnessLabel", "settings.localCam.img_brightness");
+  setTextById("settingsLocalCamImgContrastLabel", "settings.localCam.img_contrast");
+  setTextById("settingsLocalCamImgSaturationLabel", "settings.localCam.img_saturation");
+  setTextById("settingsLocalCamImgHueLabel", "settings.localCam.img_hue");
+  setTextById("settingsLocalCamImgToneShadowsLabel", "settings.localCam.img_tone_shadows");
+  setTextById("settingsLocalCamImgToneHighlightsLabel", "settings.localCam.img_tone_highlights");
+  setTextById("settingsLocalCamImgWbRedLabel", "settings.localCam.img_wb_red");
+  setTextById("settingsLocalCamImgWbBlueLabel", "settings.localCam.img_wb_blue");
+  setTextById("settingsLocalCamImgSharpenLabel", "settings.localCam.img_sharpen");
+  setTextById("settingsLocalCamImgDenoiseLabel", "settings.localCam.img_denoise");
+  setTextById("settingsLocalCamImgApplyBtn", "settings.localCam.img_apply");
+  setTextById("settingsLocalCamImgResetBtn", "settings.localCam.img_reset");
+
   setTextById("settingsTimeHeading", "settings.time.heading");
   setTextById("settingsNtpServerLabel", "settings.time.ntp_server");
   setTextById("settingsTimezoneLabel", "settings.time.timezone");
@@ -3574,6 +3784,7 @@ function applyWebTranslations() {
   setTextById("settingsScreensaverEnabledLabel", "settings.display.screensaver_enabled");
   setTextById("settingsScreensaverClockLabel", "settings.display.screensaver_clock");
   setTextById("settingsScreensaverWallpaperUploadBtn", "settings.display.screensaver_wallpaper_upload");
+  setTextById("settingsScreensaverWallpaperSelectLabel", "settings.display.screensaver_wallpaper_select");
   setTextById("settingsScreensaverWallpaperInfo", "settings.display.screensaver_wallpaper_info");
   setTextById("settingsScreensaverBrightnessLabel", "settings.display.screensaver_brightness");
   setTextById("settingsActiveBrightnessLabel", "settings.display.active_brightness");
@@ -3719,12 +3930,29 @@ async function uploadLanguageJson() {
   }
 }
 
+function sanitizeScreensaverWallpaperName(raw) {
+  let name = String(raw || "").trim().replace(/[^A-Za-z0-9._-]+/g, "-");
+  if (!name) {
+    return "screensaver.png";
+  }
+  name = name.replace(/\.png$/i, "");
+  name = name.replace(/\.[^.]+$/, "");
+  if (!name) {
+    name = "screensaver";
+  }
+  return `${name}.png`;
+}
+
 async function uploadScreensaverWallpaper() {
   const file = el.settingsScreensaverWallpaperFile?.files?.[0];
   if (!file) {
     throw new Error(t("settings.display.screensaver_wallpaper_no_file"));
   }
-  const response = await fetch("/api/sd/bg/upload?name=screensaver.png", {
+  if (!/\.png$/i.test(file.name || "")) {
+    throw new Error(t("settings.display.screensaver_wallpaper_png_only"));
+  }
+  const name = sanitizeScreensaverWallpaperName(el.settingsScreensaverWallpaperName?.value);
+  const response = await fetch(`/api/sd/bg/upload?name=${encodeURIComponent(name)}`, {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
     body: file,
@@ -3736,6 +3964,58 @@ async function uploadScreensaverWallpaper() {
       detail = json.error || detail;
     } catch (_) {}
     throw new Error(detail);
+  }
+  return name;
+}
+
+async function loadScreensaverWallpaperList(selectedName) {
+  const sel = el.settingsScreensaverWallpaperSelect;
+  if (!sel) {
+    return;
+  }
+  let files = [];
+  try {
+    const resp = await fetch("/api/sd/bg/list");
+    const data = await resp.json();
+    files = Array.isArray(data.files) ? data.files : [];
+  } catch (err) {
+    files = [];
+  }
+
+  sel.innerHTML = "";
+  const def = document.createElement("option");
+  def.value = "";
+  def.textContent = t("settings.display.screensaver_wallpaper_default");
+  sel.appendChild(def);
+
+  for (const f of files) {
+    const name = typeof f.name === "string" ? f.name : "";
+    if (!/\.png$/i.test(name)) {
+      continue; /* the screensaver loader only decodes PNG */
+    }
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = `${name} (${formatBytes(f.size || 0)})`;
+    sel.appendChild(opt);
+  }
+
+  const target = selectedName || "";
+  if (target) {
+    let found = false;
+    for (const opt of sel.options) {
+      if (opt.value === target) {
+        opt.selected = true;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const custom = document.createElement("option");
+      custom.value = target;
+      custom.textContent = target;
+      custom.selected = true;
+      sel.appendChild(custom);
+    }
   }
 }
 
@@ -3937,6 +4217,10 @@ function setActiveSettingsSection(sectionId) {
   }
   if (item.sectionId === "settingsCamerasSection" && sectionChanged) {
     void loadCameras();
+  }
+  if (item.sectionId === "settingsLocalCamSection" && sectionChanged) {
+    void loadLocalCameraStatus();
+    void refreshLocalCameraPreview();
   }
   if (item.sectionId === "settingsLogsSection") {
     startLogsPoll();
@@ -4263,6 +4547,64 @@ function renderSettings() {
   if (el.settingsSdLoggingEnabled) {
     el.settingsSdLoggingEnabled.checked = sd.logging_enabled !== false;
   }
+  const camera = settings.camera || {};
+  if (el.settingsLocalCamEnabled) {
+    el.settingsLocalCamEnabled.checked = camera.enabled === true;
+  }
+  if (el.settingsLocalCamStream) {
+    el.settingsLocalCamStream.checked = camera.stream_enabled === true;
+  }
+  if (el.settingsLocalCamMotion) {
+    el.settingsLocalCamMotion.checked = camera.motion_wake === true;
+  }
+  if (el.settingsLocalCamThreshold) {
+    el.settingsLocalCamThreshold.value = String(settingsInt(camera.motion_threshold, 1, 64, 8));
+  }
+  const motion = camera.motion || {};
+  if (el.settingsLocalCamMotionMinArea) {
+    const v = settingsInt(motion.min_area, 0, 100, 0);
+    el.settingsLocalCamMotionMinArea.value = String(v);
+    if (el.settingsLocalCamMotionMinAreaVal) {
+      el.settingsLocalCamMotionMinAreaVal.textContent = `${v}%`;
+    }
+  }
+  if (el.settingsLocalCamMotionMinDuration) {
+    el.settingsLocalCamMotionMinDuration.value = String(settingsInt(motion.min_duration_ms, 0, 1000, 0));
+  }
+  if (el.settingsLocalCamMotionCooldown) {
+    el.settingsLocalCamMotionCooldown.value = String(settingsInt(motion.cooldown_ms, 0, 30000, 1000));
+  }
+  if (el.settingsLocalCamMotionStartDelay) {
+    el.settingsLocalCamMotionStartDelay.value = String(settingsInt(motion.start_delay_ms, 0, 10000, 2000));
+  }
+  if (el.settingsLocalCamMotionIgnoreLighting) {
+    el.settingsLocalCamMotionIgnoreLighting.checked = motion.ignore_lighting !== false;
+  }
+  editor.localCamZones = Array.isArray(motion.zones)
+    ? motion.zones
+        .filter((z) => z && Number(z.w) > 0 && Number(z.h) > 0)
+        .slice(0, 4)
+        .map((z) => ({
+          x: settingsInt(z.x, 0, 100, 0),
+          y: settingsInt(z.y, 0, 100, 0),
+          w: settingsInt(z.w, 1, 100, 10),
+          h: settingsInt(z.h, 1, 100, 10),
+        }))
+    : [];
+  renderLocalCamZones();
+  if (el.settingsLocalCamQuality) {
+    el.settingsLocalCamQuality.value = String(settingsInt(camera.jpeg_quality, 10, 95, 55));
+  }
+  if (el.settingsLocalCamResolution) {
+    el.settingsLocalCamResolution.value = camera.resolution === 1 ? "1" : "0";
+  }
+  if (el.settingsLocalCamHflip) {
+    el.settingsLocalCamHflip.checked = camera.hflip === true;
+  }
+  if (el.settingsLocalCamVflip) {
+    el.settingsLocalCamVflip.checked = camera.vflip === true;
+  }
+  applyLocalCameraImageForm(camera.image);
   el.settingsNtpServer.value = time.ntp_server || "";
   el.settingsTimezone.value = time.timezone || "";  if (el.settingsLanguage) {
     el.settingsLanguage.value = normalizeUiLanguage(ui.language);
@@ -4283,6 +4625,7 @@ function renderSettings() {
   if (el.settingsScreensaverClock) {
     el.settingsScreensaverClock.checked = display.screensaver_clock_enabled === true;
   }
+  loadScreensaverWallpaperList(typeof display.screensaver_wallpaper === "string" ? display.screensaver_wallpaper : "");
   if (el.settingsScreensaverBrightness) {
     el.settingsScreensaverBrightness.value = settingsInt(display.screensaver_brightness, 0, 100, 20);
   }
@@ -5529,6 +5872,7 @@ async function saveSettings() {
   const audioVolume = settingsInt(el.settingsAudioVolume?.value, 0, 100, 70);
   const screensaverEnabled = Boolean(el.settingsScreensaverEnabled?.checked);
   const screensaverClockEnabled = Boolean(el.settingsScreensaverClock?.checked);
+  const screensaverWallpaper = String(el.settingsScreensaverWallpaperSelect?.value || "");
   const screensaverBrightness = settingsInt(el.settingsScreensaverBrightness?.value, 0, 100, 20);
   const activeBrightness = settingsInt(el.settingsActiveBrightness?.value, 0, 100, 100);
   const dimBrightness = settingsInt(el.settingsDimBrightness?.value, 0, 100, 10);
@@ -5595,6 +5939,7 @@ async function saveSettings() {
     display: {
       screensaver_enabled: screensaverEnabled,
       screensaver_clock_enabled: screensaverClockEnabled,
+      screensaver_wallpaper: screensaverWallpaper,
       screensaver_brightness: screensaverBrightness,
       active_brightness: activeBrightness,
       dim_brightness: dimBrightness,
@@ -5619,6 +5964,369 @@ async function saveSettings() {
   setStatus(t("status.saving_settings"));
   await putSettings(payload);
   setStatus(t("status.settings_saved_reboot"));
+}
+
+async function saveLocalCamera() {
+  const wasRunning = editor.localCameraRunning === true;
+  const camera = {
+    enabled: Boolean(el.settingsLocalCamEnabled?.checked),
+    stream_enabled: Boolean(el.settingsLocalCamStream?.checked),
+    motion_wake: Boolean(el.settingsLocalCamMotion?.checked),
+    motion_threshold: settingsInt(el.settingsLocalCamThreshold?.value, 1, 64, 8),
+    jpeg_quality: settingsInt(el.settingsLocalCamQuality?.value, 10, 95, 55),
+    resolution: settingsInt(el.settingsLocalCamResolution?.value, 0, 1, 0),
+    hflip: Boolean(el.settingsLocalCamHflip?.checked),
+    vflip: Boolean(el.settingsLocalCamVflip?.checked),
+    motion: {
+      min_area: settingsInt(el.settingsLocalCamMotionMinArea?.value, 0, 100, 0),
+      min_duration_ms: settingsInt(el.settingsLocalCamMotionMinDuration?.value, 0, 1000, 0),
+      cooldown_ms: settingsInt(el.settingsLocalCamMotionCooldown?.value, 0, 30000, 1000),
+      start_delay_ms: settingsInt(el.settingsLocalCamMotionStartDelay?.value, 0, 10000, 2000),
+      ignore_lighting: Boolean(el.settingsLocalCamMotionIgnoreLighting?.checked),
+      zones: editor.localCamZones.slice(0, 4).map((z) => ({
+        x: z.x,
+        y: z.y,
+        w: z.w,
+        h: z.h,
+      })),
+    },
+  };
+
+  setStatus(t("status.saving_settings"));
+  try {
+    await putSettings({ camera, reboot: false });
+    setStatus(t("settings.localCam.saved"));
+    await loadLocalCameraStatus();
+    if (!wasRunning && editor.localCameraRunning === true) {
+      // Cold start: the sensor needs a moment before the snapshot endpoint
+      // can return the first frame. Avoid firing a request that would 503.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await loadLocalCameraStatus();
+    }
+    await refreshLocalCameraPreview();
+  } catch (err) {
+    setStatus(t("settings.localCam.save_failed", { error: err.message }), true);
+  }
+}
+
+async function loadLocalCameraStatus() {
+  const statusEl = el.settingsLocalCamStatus;
+  try {
+    const data = await apiGet("/api/camera/status");
+    editor.localCameraRunning = data.running === true;
+    if (statusEl) {
+      const resLabel = data.resolution === 1
+        ? t("settings.localCam.resolution_hd_ready")
+        : t("settings.localCam.resolution_full_hd");
+      statusEl.textContent = [
+        `${t("settings.localCam.enabled")}: ${data.running ? t("common.yes") : t("common.no")}`,
+        `${data.width}x${data.height} (${resLabel})`,
+        `${t("settings.localCam.motion")}: ${data.motion_wake ? t("common.yes") : t("common.no")}`,
+      ].join(" | ");
+      statusEl.classList.remove("error");
+    }
+    if (el.settingsLocalCamResolution) {
+      el.settingsLocalCamResolution.value = data.resolution === 1 ? "1" : "0";
+    }
+  } catch (err) {
+    editor.localCameraRunning = false;
+    if (statusEl) {
+      statusEl.textContent = t("settings.localCam.status_error", { error: err.message });
+      statusEl.classList.add("error");
+    }
+  }
+}
+
+async function refreshLocalCameraPreview() {
+  const img = el.settingsLocalCamSnapshot;
+  if (!img) return;
+  if (editor.localCameraRunning !== true) {
+    img.hidden = true;
+    return;
+  }
+  try {
+    const response = await fetch("/api/camera/snapshot", { cache: "no-store" });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) throw new Error("empty");
+    const objectUrl = URL.createObjectURL(blob);
+    if (img.dataset.objectUrl) {
+      URL.revokeObjectURL(img.dataset.objectUrl);
+    }
+    img.src = objectUrl;
+    img.dataset.objectUrl = objectUrl;
+    img.hidden = false;
+  } catch (_) {
+    img.hidden = true;
+  }
+}
+
+function renderLocalCamZones() {
+  const overlay = el.settingsLocalCamZonesOverlay;
+  if (!overlay) return;
+  overlay.querySelectorAll(".camera-zone").forEach((node) => node.remove());
+  editor.localCamZones.forEach((z, i) => {
+    const div = document.createElement("div");
+    div.className = "camera-zone";
+    div.style.left = `${z.x}%`;
+    div.style.top = `${z.y}%`;
+    div.style.width = `${z.w}%`;
+    div.style.height = `${z.h}%`;
+    const label = document.createElement("span");
+    label.className = "camera-zone-label";
+    label.textContent = String(i + 1);
+    div.appendChild(label);
+    overlay.appendChild(div);
+  });
+
+  const list = el.settingsLocalCamZonesList;
+  if (list) {
+    list.innerHTML = "";
+    editor.localCamZones.forEach((z, i) => {
+      const item = document.createElement("span");
+      item.className = "camera-zone-item";
+      item.textContent = `${i + 1}: ${z.x}%,${z.y}% ${z.w}×${z.h}%`;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "camera-zone-del";
+      del.textContent = "×";
+      del.title = t("settings.localCam.zones_clear");
+      del.onclick = () => {
+        editor.localCamZones.splice(i, 1);
+        renderLocalCamZones();
+      };
+      item.appendChild(del);
+      list.appendChild(item);
+    });
+  }
+  if (el.settingsLocalCamZonesClearBtn) {
+    el.settingsLocalCamZonesClearBtn.disabled = editor.localCamZones.length === 0;
+  }
+}
+
+function localCamZoneDraftRect() {
+  const d = editor.localCamZoneDraft;
+  if (!d) return null;
+  return {
+    x: Math.min(d.x0, d.x1),
+    y: Math.min(d.y0, d.y1),
+    w: Math.abs(d.x1 - d.x0),
+    h: Math.abs(d.y1 - d.y0),
+  };
+}
+
+function renderLocalCamZoneDraft() {
+  const overlay = el.settingsLocalCamZonesOverlay;
+  if (!overlay) return;
+  let draft = overlay.querySelector(".camera-zone-draft");
+  const rect = localCamZoneDraftRect();
+  if (!rect) {
+    if (draft) draft.remove();
+    return;
+  }
+  if (!draft) {
+    draft = document.createElement("div");
+    draft.className = "camera-zone camera-zone-draft";
+    overlay.appendChild(draft);
+  }
+  draft.style.left = `${rect.x}%`;
+  draft.style.top = `${rect.y}%`;
+  draft.style.width = `${rect.w}%`;
+  draft.style.height = `${rect.h}%`;
+}
+
+function localCamZonePercent(clientX, clientY) {
+  const wrap = el.settingsLocalCamZonesWrap;
+  if (!wrap) return { x: 0, y: 0 };
+  const rect = wrap.getBoundingClientRect();
+  const pct = (v, max) => clamp(Math.round((v / Math.max(max, 1)) * 100), 0, 100);
+  return { x: pct(clientX - rect.left, rect.width), y: pct(clientY - rect.top, rect.height) };
+}
+
+function localCamZoneStart(clientX, clientY) {
+  if (editor.localCamZones.length >= 4) return;
+  const p = localCamZonePercent(clientX, clientY);
+  editor.localCamZoneDraft = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+  renderLocalCamZoneDraft();
+}
+
+function localCamZoneMove(clientX, clientY) {
+  if (!editor.localCamZoneDraft) return;
+  const p = localCamZonePercent(clientX, clientY);
+  editor.localCamZoneDraft.x1 = p.x;
+  editor.localCamZoneDraft.y1 = p.y;
+  renderLocalCamZoneDraft();
+}
+
+function localCamZoneEnd() {
+  const d = editor.localCamZoneDraft;
+  editor.localCamZoneDraft = null;
+  const overlay = el.settingsLocalCamZonesOverlay;
+  if (overlay) {
+    const draft = overlay.querySelector(".camera-zone-draft");
+    if (draft) draft.remove();
+  }
+  if (!d) return;
+  const x = Math.min(d.x0, d.x1);
+  const y = Math.min(d.y0, d.y1);
+  const w = Math.abs(d.x1 - d.x0);
+  const h = Math.abs(d.y1 - d.y0);
+  if (w < 3 || h < 3) return;
+  editor.localCamZones.push({ x, y, w, h });
+  renderLocalCamZones();
+}
+
+async function refreshLocalCamZonesSnapshot() {
+  const img = el.settingsLocalCamZonesSnapshot;
+  const wrap = el.settingsLocalCamZonesWrap;
+  if (!img || !wrap) return;
+  if (editor.localCameraRunning !== true) {
+    wrap.hidden = true;
+    return;
+  }
+  try {
+    const response = await fetch("/api/camera/snapshot", { cache: "no-store" });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) throw new Error("empty");
+    const objectUrl = URL.createObjectURL(blob);
+    if (img.dataset.objectUrl) {
+      URL.revokeObjectURL(img.dataset.objectUrl);
+    }
+    img.src = objectUrl;
+    img.dataset.objectUrl = objectUrl;
+    wrap.hidden = false;
+  } catch (_) {
+    wrap.hidden = true;
+  }
+}
+
+async function loadLocalCamMotionDiagnostics() {
+  const diag = el.settingsLocalCamMotionDiag;
+  await refreshLocalCamZonesSnapshot();
+  try {
+    const data = await apiGet("/api/camera/motion");
+    if (diag) {
+      diag.hidden = false;
+      diag.classList.remove("error");
+      const parts = [
+        `${t("settings.localCam.motion_level")}: ${data.level}`,
+        `${t("settings.localCam.motion_changed")}: ${data.changed_pct}%`,
+        `${t("settings.localCam.motion_active")}: ${data.active ? t("common.yes") : t("common.no")}`,
+        `${t("settings.localCam.motion_triggers")}: ${data.trigger_count}`,
+      ];
+      if (data.ignored_lighting === true) {
+        parts.push(t("settings.localCam.motion_lighting"));
+      }
+      diag.textContent = parts.join(" | ");
+    }
+  } catch (err) {
+    if (diag) {
+      diag.hidden = false;
+      diag.classList.add("error");
+      diag.textContent = t("settings.localCam.motion_diag_failed", { error: err.message });
+    }
+  }
+}
+
+/* Manual ISP calibration. `group` decides which switch gates a slider:
+ * "basic" -> master switch only, "wb"/"sharpen"/"denoise" -> master + the
+ * matching "Auto ..." switch being OFF. Values are the hardware units. */
+const LOCAL_CAM_IMAGE_FIELDS = [
+  { key: "brightness", id: "settingsLocalCamImgBrightness", min: -128, max: 127, def: 0, percent: false, group: "basic" },
+  { key: "contrast", id: "settingsLocalCamImgContrast", min: 0, max: 255, def: 128, percent: false, group: "basic" },
+  { key: "saturation", id: "settingsLocalCamImgSaturation", min: 0, max: 255, def: 128, percent: false, group: "basic" },
+  { key: "hue", id: "settingsLocalCamImgHue", min: 0, max: 360, def: 0, percent: false, group: "basic" },
+  { key: "tone_shadows", id: "settingsLocalCamImgToneShadows", min: -100, max: 100, def: 0, percent: true, group: "basic" },
+  { key: "tone_highlights", id: "settingsLocalCamImgToneHighlights", min: -100, max: 100, def: 0, percent: true, group: "basic" },
+  { key: "wb_red", id: "settingsLocalCamImgWbRed", min: 50, max: 200, def: 100, percent: true, group: "wb" },
+  { key: "wb_blue", id: "settingsLocalCamImgWbBlue", min: 50, max: 200, def: 100, percent: true, group: "wb" },
+  { key: "sharpen", id: "settingsLocalCamImgSharpen", min: 25, max: 300, def: 100, percent: true, group: "sharpen" },
+  { key: "denoise", id: "settingsLocalCamImgDenoise", min: 25, max: 200, def: 100, percent: true, group: "denoise" },
+];
+
+function readLocalCameraImageForm() {
+  const image = {
+    manual: Boolean(el.settingsLocalCamImgManual?.checked),
+    wb_manual: !Boolean(el.settingsLocalCamImgAutoWb?.checked),
+    sharpen_manual: !Boolean(el.settingsLocalCamImgAutoSharpen?.checked),
+    denoise_manual: !Boolean(el.settingsLocalCamImgAutoDenoise?.checked),
+  };
+  for (const field of LOCAL_CAM_IMAGE_FIELDS) {
+    const input = document.getElementById(field.id);
+    image[field.key] = settingsInt(input?.value, field.min, field.max, field.def);
+  }
+  return image;
+}
+
+function refreshLocalCameraImageUi() {
+  const master = Boolean(el.settingsLocalCamImgManual?.checked);
+  const auto = {
+    wb: Boolean(el.settingsLocalCamImgAutoWb?.checked),
+    sharpen: Boolean(el.settingsLocalCamImgAutoSharpen?.checked),
+    denoise: Boolean(el.settingsLocalCamImgAutoDenoise?.checked),
+  };
+  for (const field of LOCAL_CAM_IMAGE_FIELDS) {
+    const input = document.getElementById(field.id);
+    const row = document.getElementById(`${field.id}Row`);
+    const val = document.getElementById(`${field.id}Val`);
+    const active = master && (field.group === "basic" || !auto[field.group]);
+    if (input) {
+      input.disabled = !active;
+    }
+    if (row) {
+      row.classList.toggle("disabled", !active);
+    }
+    if (val && input) {
+      val.textContent = field.percent ? `${input.value}%` : input.value;
+    }
+  }
+}
+
+function applyLocalCameraImageForm(image) {
+  const src = image && typeof image === "object" ? image : {};
+  if (el.settingsLocalCamImgManual) {
+    el.settingsLocalCamImgManual.checked = src.manual === true;
+  }
+  if (el.settingsLocalCamImgAutoWb) {
+    el.settingsLocalCamImgAutoWb.checked = src.wb_manual !== true;
+  }
+  if (el.settingsLocalCamImgAutoSharpen) {
+    el.settingsLocalCamImgAutoSharpen.checked = src.sharpen_manual !== true;
+  }
+  if (el.settingsLocalCamImgAutoDenoise) {
+    el.settingsLocalCamImgAutoDenoise.checked = src.denoise_manual !== true;
+  }
+  for (const field of LOCAL_CAM_IMAGE_FIELDS) {
+    const input = document.getElementById(field.id);
+    if (input) {
+      input.value = String(settingsInt(src[field.key], field.min, field.max, field.def));
+    }
+  }
+  refreshLocalCameraImageUi();
+}
+
+async function applyLocalCameraImage() {
+  if (!el.settingsLocalCamImgManual) return;
+  setStatus(t("status.saving_settings"));
+  try {
+    await putSettings({ camera: { image: readLocalCameraImageForm() }, reboot: false });
+    setStatus(t("settings.localCam.img_applied"));
+    await refreshLocalCameraPreview();
+  } catch (err) {
+    setStatus(t("settings.localCam.img_apply_failed", { error: err.message }), true);
+  }
+}
+
+function resetLocalCameraImage() {
+  for (const field of LOCAL_CAM_IMAGE_FIELDS) {
+    const input = document.getElementById(field.id);
+    if (input) {
+      input.value = String(field.def);
+    }
+  }
+  refreshLocalCameraImageUi();
+  void applyLocalCameraImage();
 }
 
 function defaultLayout() {
@@ -8898,6 +9606,70 @@ function bindUi() {
   if (el.camerasDeleteBtn) {
     el.camerasDeleteBtn.onclick = deleteCamerasEntry;
   }
+  if (el.settingsLocalCamSaveBtn) {
+    el.settingsLocalCamSaveBtn.onclick = () => void saveLocalCamera();
+  }
+  if (el.settingsLocalCamSnapshotBtn) {
+    el.settingsLocalCamSnapshotBtn.onclick = () => void refreshLocalCameraPreview();
+  }
+  if (el.settingsLocalCamZonesSnapshotBtn) {
+    el.settingsLocalCamZonesSnapshotBtn.onclick = () => void refreshLocalCamZonesSnapshot();
+  }
+  if (el.settingsLocalCamZonesClearBtn) {
+    el.settingsLocalCamZonesClearBtn.onclick = () => {
+      editor.localCamZones = [];
+      renderLocalCamZones();
+    };
+  }
+  if (el.settingsLocalCamMotionDiagBtn) {
+    el.settingsLocalCamMotionDiagBtn.onclick = () => void loadLocalCamMotionDiagnostics();
+  }
+  if (el.settingsLocalCamMotionMinArea) {
+    el.settingsLocalCamMotionMinArea.addEventListener("input", () => {
+      const v = settingsInt(el.settingsLocalCamMotionMinArea.value, 0, 100, 0);
+      if (el.settingsLocalCamMotionMinAreaVal) {
+        el.settingsLocalCamMotionMinAreaVal.textContent = `${v}%`;
+      }
+    });
+  }
+  if (el.settingsLocalCamZonesOverlay) {
+    el.settingsLocalCamZonesOverlay.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      localCamZoneStart(ev.clientX, ev.clientY);
+    });
+    window.addEventListener("pointermove", (ev) => {
+      if (!editor.localCamZoneDraft) return;
+      localCamZoneMove(ev.clientX, ev.clientY);
+    });
+    window.addEventListener("pointerup", () => {
+      if (editor.localCamZoneDraft) localCamZoneEnd();
+    });
+  }
+  if (el.settingsLocalCamImgApplyBtn) {
+    el.settingsLocalCamImgApplyBtn.onclick = () => void applyLocalCameraImage();
+  }
+  if (el.settingsLocalCamImgResetBtn) {
+    el.settingsLocalCamImgResetBtn.onclick = () => resetLocalCameraImage();
+  }
+  for (const boxId of [
+    "settingsLocalCamImgManual",
+    "settingsLocalCamImgAutoWb",
+    "settingsLocalCamImgAutoSharpen",
+    "settingsLocalCamImgAutoDenoise",
+  ]) {
+    const box = document.getElementById(boxId);
+    if (!box) continue;
+    box.addEventListener("change", () => {
+      refreshLocalCameraImageUi();
+      void applyLocalCameraImage();
+    });
+  }
+  for (const field of LOCAL_CAM_IMAGE_FIELDS) {
+    const input = document.getElementById(field.id);
+    if (!input) continue;
+    input.addEventListener("input", refreshLocalCameraImageUi);
+    input.addEventListener("change", () => void applyLocalCameraImage());
+  }
   if (el.camerasSource) {
     el.camerasSource.onchange = () => {
       populateCamerasEntityOptions();
@@ -9573,7 +10345,7 @@ function bindUi() {
         el.settingsScreensaverWallpaperInfo.classList.remove("error");
       }
       try {
-        await uploadScreensaverWallpaper();
+        const savedName = await uploadScreensaverWallpaper();
         if (el.settingsScreensaverWallpaperInfo) {
           el.settingsScreensaverWallpaperInfo.textContent = t("settings.display.screensaver_wallpaper_ok");
           el.settingsScreensaverWallpaperInfo.classList.remove("error");
@@ -9581,6 +10353,7 @@ function bindUi() {
         if (el.settingsScreensaverWallpaperFile) {
           el.settingsScreensaverWallpaperFile.value = "";
         }
+        loadScreensaverWallpaperList(savedName);
       } catch (err) {
         if (el.settingsScreensaverWallpaperInfo) {
           el.settingsScreensaverWallpaperInfo.textContent = t("settings.display.screensaver_wallpaper_fail", { error: err.message });

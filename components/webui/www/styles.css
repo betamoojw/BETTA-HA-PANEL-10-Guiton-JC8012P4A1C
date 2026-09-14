@@ -182,6 +182,85 @@ body {
   display: none !important;
 }
 
+.camera-snapshot {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  margin: 12px 0;
+  border: 1px solid #2f4960;
+  border-radius: 8px;
+  background: #0b1720;
+}
+
+.camera-zones-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 640px;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.camera-zones-wrap .camera-snapshot {
+  margin: 0;
+  max-width: 640px;
+}
+
+.camera-zones-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.camera-zone {
+  position: absolute;
+  border: 2px solid #3b8cff;
+  background: rgba(59, 140, 255, 0.18);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.camera-zone-label {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #cfe6ff;
+  background: rgba(11, 23, 32, 0.75);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.camera-zones-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.camera-zone-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b9c7d2;
+  background: #12222e;
+  border: 1px solid #2f4960;
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.camera-zone-del {
+  border: none;
+  background: transparent;
+  color: #ff8a8a;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 .settings-content {
   grid-column: 1;
   display: grid;
@@ -389,6 +468,52 @@ textarea {
 
 .meta.error {
   color: #ff8f94;
+}
+
+.cal {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #2f4960;
+  border-radius: 10px;
+  background: #10202e;
+}
+
+.cal-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #c8d7e7;
+}
+
+.cal-row {
+  display: grid;
+  gap: 4px;
+}
+
+.cal-row.disabled {
+  opacity: 0.45;
+}
+
+.cal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cal-val {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
 }
 
 .ota-progress {

@@ -59,6 +59,7 @@ set(MAIN_REQUIRES
     littlefs
     webui
     esp_driver_jpeg
+    esp_video
     esp_codec_dev
     esp-tls
     fatfs

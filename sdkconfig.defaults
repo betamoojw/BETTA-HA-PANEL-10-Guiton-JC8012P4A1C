@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-FNCL-1.1
 # Copyright (c) 2026 Cpt_Kirk
 # Core behavior defaults for development
-
-# Target chip: ESP32-P4 (host) + ESP32-C6 (Wi-Fi coprocessor).
-# Declared here so a fresh clone builds without `idf.py set-target esp32p4`.
-CONFIG_IDF_TARGET="esp32p4"
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
@@ -35,6 +31,11 @@ CONFIG_ESP_HOSTED_SDIO_RESET_DELAY_MS=1500
 # CONFIG_ESP_HOSTED_SDIO_OPTIMIZATION_RX_MAX_SIZE is not set
 CONFIG_ESP_HOSTED_SDIO_OPTIMIZATION_RX_STREAMING_MODE=y
 # CONFIG_ESP_HOSTED_SDIO_OPTIMIZATION_RX_NONE is not set
+
+# Bound SDIO in-flight buffers to keep TX headroom on the small P4 internal-DMA
+# heap while the camera is running.
+CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=10
+CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=10
 
 # User provided ESP-Hosted SDIO wiring
 CONFIG_ESP_HOSTED_PRIV_SDIO_PIN_CLK_SLOT_1=18

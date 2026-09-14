@@ -225,13 +225,16 @@ włącza się wygaszacz. Tryb nocny przyciemnia panel w wybranych godzinach.
 | `W gsl3680: Unable to initialize the I2C address`                              | Driver can't select the I2C address — missing `driver_data` (0x40) or missing RST/INT GPIOs. Fixed in current source; on old builds touch still works via the reset fallback. | Rebuild + reflash; see [`JAK-URUCHOMIC-DOTYK-GSL3680.md`](JAK-URUCHOMIC-DOTYK-GSL3680.md) |
 | `W gsl3680: touch read_data slow: 50 ms (i2c stall?)`                          | One slow I2C read; usually transient.                                               | Check touch responsiveness / Sprawdź reakcję dotyku |
 | `E transport: STA TX buffer alloc failed (internal DMA heap exhausted)`        | WiFi TX buffer pressure on the C6 transport under burst traffic.                    | Usually transient; reduce entity poll burst / Zwykle przejściowe |
-| `W httpd_uri: URI '/api/cameras' not found`                                    | Editor polling a camera endpoint that this variant intentionally removed.            | None — cameras are disabled / Nic — kamery wyłączone |
+| `W httpd_uri: URI '/api/cameras' not found`                                    | Editor polling the IP-camera list endpoint on a build from before `APP_FEATURE_CAMERAS=y`. On the current firmware `/api/cameras` responds normally. | Update firmware / Zaktualizuj firmware |
 | `W httpd_uri: URI '/app.js.gz' not found`                                      | Browser asked for a gzip-compressed asset the server serves uncompressed.           | None — harmless 404 / Nic — nieszkodliwe 404  |
 
-> **Note / Uwaga:** the `/api/cameras` endpoint is expected to 404 on this
-> variant — cameras are compile-disabled (`APP_FEATURE_CAMERAS=n`) and no
-> camera driver is linked. Xiaozhi **is** compiled in but stays idle until it
-> is enabled in **Settings → Xiaozhi AI** and bound to a Xiaozhi cloud account.
+> **Note / Uwaga:** the current firmware compiles in both the built-in OV02C10
+> camera (`APP_FEATURE_LOCAL_CAMERA=y`) and IP cameras (`APP_FEATURE_CAMERAS=y`).
+> The built-in camera is exposed under `/api/camera/*` (snapshot, status,
+> motion, stream) — see **section 12**. If `/api/cameras` still 404s you are on
+> an older build; update the firmware. Xiaozhi **is** compiled in but stays idle
+> until it is enabled in **Settings → Xiaozhi AI** and bound to a Xiaozhi cloud
+> account.
 
 ### Common issues / Typowe problemy
 
@@ -281,3 +284,72 @@ idf.py -B build-panel10jc -p COM3 flash
 
 See [`README.md`](README.md) and [`release-notes.md`](release-notes.md) for
 version history. Full touch bring-up: [`JAK-URUCHOMIC-DOTYK-GSL3680.md`](JAK-URUCHOMIC-DOTYK-GSL3680.md).
+
+---
+
+## 12. Built-in camera / Wbudowana kamera
+
+**EN** — The panel has a built-in **OV02C10** MIPI-CSI camera (front-facing)
+used for motion detection (screen wake) and live preview. It is compiled in
+(`CONFIG_APP_FEATURE_LOCAL_CAMERA=y`) and configured in **Settings → Camera**.
+IP cameras are also compiled in (`CONFIG_APP_FEATURE_CAMERAS=y`).
+
+Endpoints (replace `<ip>` with the panel address):
+
+| Endpoint | Description |
+|---|---|
+| `GET http://<ip>/api/camera/snapshot` | JPEG snapshot (`image/jpeg`) |
+| `GET http://<ip>/api/camera/status` | JSON: `running`, `width`, `height`, `resolution`, `motion_wake`, `motion_threshold`, `jpeg_quality`, `hflip`, `vflip`, `stream_enabled` |
+| `GET http://<ip>/api/camera/motion` | Live motion diagnostics: `threshold`, `level`, `changed_pct`, `ignored_lighting`, `active`, `trigger_count`, `last_trigger_ms`, plus per-zone `zones[]` with `x,y,w,h,level,changed_pct` |
+| `GET http://<ip>/api/camera/stream` | MJPEG multipart stream (~2 fps). Returns `{"error":"stream_disabled"}` until **Stream** is enabled, `stream_busy` if a client is already streaming |
+
+Settings (stored in the `camera` JSON object):
+
+| Key | Range | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | off | Camera power on/off |
+| `motion_wake` | bool | off | Wake the screen on detected motion |
+| `motion_threshold` | 1–64 | 8 | Frame-difference sensitivity (lower = more sensitive) |
+| `jpeg_quality` | 10–95 | 55 | Snapshot/stream JPEG quality |
+| `hflip` / `vflip` | bool | off | Mirror image horizontally/vertically |
+| `stream_enabled` | bool | off | Allow `/api/camera/stream` |
+| `resolution` | 0–1 | 0 | 0 = full sensor, 1 = half (downscaled) |
+| `motion.min_area` | 0–100 | 0 | Minimum % of frame that must change |
+| `motion.min_duration_ms` | 0–1000 | 0 | Motion must last this long to count |
+| `motion.cooldown_ms` | 0–30000 | 1000 | Block re-wake for this long |
+| `motion.start_delay_ms` | 0–10000 | 2000 | Ignore motion right after camera starts |
+| `motion.ignore_lighting` | bool | on | Ignore global brightness changes |
+| `motion.zones` | up to 4 | none | Rectangles `{x,y,w,h}` in % of frame (0–100); only motion inside them counts |
+
+**PL** — Panel ma wbudowaną kamerę **OV02C10** (MIPI-CSI, skierowaną na
+użytkownika) do detekcji ruchu (budzenie ekranu) i podglądu na żywo. Jest
+wkompilowana (`CONFIG_APP_FEATURE_LOCAL_CAMERA=y`) i konfigurowana w
+**Ustawienia → Kamera**. Kamery IP również są wkompilowane
+(`CONFIG_APP_FEATURE_CAMERAS=y`).
+
+Endpointy (zamiast `<ip>` wpisz adres panelu):
+
+| Endpoint | Opis |
+|---|---|
+| `GET http://<ip>/api/camera/snapshot` | Zdjęcie JPEG (`image/jpeg`) |
+| `GET http://<ip>/api/camera/status` | JSON: `running`, `width`, `height`, `resolution`, `motion_wake`, `motion_threshold`, `jpeg_quality`, `hflip`, `vflip`, `stream_enabled` |
+| `GET http://<ip>/api/camera/motion` | Diagnostyka ruchu na żywo: `threshold`, `level`, `changed_pct`, `ignored_lighting`, `active`, `trigger_count`, `last_trigger_ms` oraz `zones[]` z `x,y,w,h,level,changed_pct` |
+| `GET http://<ip>/api/camera/stream` | Strumień MJPEG multipart (~2 fps). Zwraca `{"error":"stream_disabled"}` dopóki **Strumień** nie jest włączony, `stream_busy` gdy inny klient już streamuje |
+
+Ustawienia (przechowywane w obiekcie JSON `camera`):
+
+| Klucz | Zakres | Domyślnie | Opis |
+|---|---|---|---|
+| `enabled` | bool | wył. | Włączanie/wyłączanie kamery |
+| `motion_wake` | bool | wył. | Budzenie ekranu po wykryciu ruchu |
+| `motion_threshold` | 1–64 | 8 | Czułość różnicy klatek (niżej = bardziej czułe) |
+| `jpeg_quality` | 10–95 | 55 | Jakość JPEG zdjęć/strumienia |
+| `hflip` / `vflip` | bool | wył. | Odbicie lustrzane w poziomie/pionie |
+| `stream_enabled` | bool | wył. | Zezwolenie na `/api/camera/stream` |
+| `resolution` | 0–1 | 0 | 0 = pełna matryca, 1 = połowa (zmniejszona) |
+| `motion.min_area` | 0–100 | 0 | Minimalny % kadru, który musi się zmienić |
+| `motion.min_duration_ms` | 0–1000 | 0 | Ruch musi trwać tyle, by został uznany |
+| `motion.cooldown_ms` | 0–30000 | 1000 | Blokada ponownego wybudzenia na ten czas |
+| `motion.start_delay_ms` | 0–10000 | 2000 | Ignoruj ruch zaraz po starcie kamery |
+| `motion.ignore_lighting` | bool | włącz | Ignoruj globalne zmiany jasności |
+| `motion.zones` | do 4 | brak | Prostokąty `{x,y,w,h}` w % kadru (0–100); liczy się ruch tylko w nich |

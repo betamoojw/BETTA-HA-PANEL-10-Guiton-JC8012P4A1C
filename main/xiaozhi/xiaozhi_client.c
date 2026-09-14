@@ -1029,12 +1029,34 @@ bool xz_xiaozhi_configured(void)
     /* A non-empty token is enough: the cloud authorizes each connection by the
      * Device-Id header and may hand back "test-token" even once the device is
      * bound, so it must not block readiness. */
-    return s.server[0] != '\0' && s.token[0] != '\0';
+    if (s.server[0] != '\0' && s.token[0] != '\0') {
+        return true;
+    }
+
+    /* app_main initializes the client late in boot. Until then the UI must
+     * still be able to tell a bound device apart from a genuinely unbound one,
+     * otherwise xz_ui_apply_setup_screen() starts the cloud activation flow
+     * and the activation task can call xz_xiaozhi_set_config() before
+     * s.mutex exists. Fall back to the persisted runtime settings. */
+    runtime_settings_t st;
+    if (runtime_settings_load(&st) == ESP_OK) {
+        return st.xiaozhi_server[0] != '\0' && st.xiaozhi_token[0] != '\0';
+    }
+    return false;
 }
 
 void xz_xiaozhi_set_config(const xiaozhi_config_t *cfg)
 {
     if (cfg == NULL) {
+        return;
+    }
+
+    /* Defensive: if the client has not been initialized yet (s.mutex == NULL)
+     * the config would be overwritten by xz_xiaozhi_init() anyway, and taking
+     * a NULL mutex would assert. The activation flow only races this path
+     * during early boot, and xz_xiaozhi_configured() now prevents it; still,
+     * never crash on a NULL mutex. */
+    if (s.mutex == NULL) {
         return;
     }
 

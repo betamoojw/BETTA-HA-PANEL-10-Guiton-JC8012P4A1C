@@ -12,6 +12,8 @@
 #include "esp_netif.h"
 #include "nvs_flash.h"
 #include "soc/soc_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "api/http_server.h"
 #include "api/api_routes.h"
@@ -61,13 +63,18 @@
 static runtime_settings_t s_runtime_settings = {0};
 
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
-static void local_camera_motion_cb(void *user_data)
+/* The built-in camera is opt-in and controlled ONLY from Settings
+ * (panel: Ustawienia -> Kamera; web editor: settings). It must never
+ * auto-start at boot: the 1080p esp_video pipeline consumes the internal
+ * DMA heap and starves the ESP-Hosted WiFi transport ("STA TX buffer
+ * alloc failed (internal DMA heap exhausted)"), which makes the web
+ * editor unreachable. Enable it manually in Settings when needed. */
+static void camera_boot_task(void *arg)
 {
-    (void)user_data;
-    /* Motion in front of the panel wakes the display; the screensaver
-     * overlay hides itself on the next poll once the power state machine
-     * reports the screen as active again. */
-    display_note_activity();
+    (void)arg;
+    ESP_LOGI(TAG_CAMERA, "Local camera not auto-started; enable it in Settings");
+    api_camera_local_set_stream_enabled(false);
+    vTaskDelete(NULL);
 }
 #endif
 
@@ -199,6 +206,14 @@ void app_main(void)
     data_log_set_log_sensors_enabled(s_runtime_settings.sd_log_sensors_enabled);
     data_log_set_log_camera_enabled(s_runtime_settings.sd_log_camera_enabled);
 #endif
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    /* The manual ISP calibration is stored in the camera component rather than
+     * in the settings struct, so it is pushed once for the whole session. */
+    (void)runtime_settings_apply_image_calibration(&s_runtime_settings);
+    /* Motion tuning likewise lives in the camera component and is applied once
+     * here so it is in effect whenever the pipeline is started. */
+    (void)runtime_settings_apply_motion_config(&s_runtime_settings);
+#endif
     (void)ui_i18n_init(s_runtime_settings.ui_language);
     (void)time_sync_set_timezone(s_runtime_settings.time_tz);
     ESP_ERROR_CHECK(display_init());
@@ -317,22 +332,12 @@ void app_main(void)
 #endif
 
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
-        /* Best effort: a missing/broken camera must never block boot. */
-        if (s_runtime_settings.camera_enabled) {
-            esp_err_t cam_err = local_camera_start();
-            if (cam_err != ESP_OK) {
-                ESP_LOGW(TAG_CAMERA, "Local camera start failed: %s", esp_err_to_name(cam_err));
-            } else {
-                local_camera_register_motion_cb(local_camera_motion_cb, NULL);
-                local_camera_set_motion_wake(s_runtime_settings.camera_motion_wake);
-                local_camera_set_motion_threshold(s_runtime_settings.camera_motion_threshold);
-                local_camera_set_jpeg_quality(s_runtime_settings.camera_jpeg_quality);
-                local_camera_set_flip(s_runtime_settings.camera_hflip, s_runtime_settings.camera_vflip);
-            }
-        } else {
-            ESP_LOGI(TAG_CAMERA, "Local camera disabled in settings");
+        /* Start the camera from a dedicated task: esp_video_init + the JPEG
+         * engine overflow the 8KB main task stack when run inline (the
+         * original bootloop cause). */
+        if (xTaskCreate(camera_boot_task, "camera_boot", 16 * 1024, NULL, 5, NULL) != pdPASS) {
+            ESP_LOGE(TAG_CAMERA, "Failed to create camera_boot task");
         }
-        api_camera_local_set_stream_enabled(s_runtime_settings.camera_stream_enabled);
 #endif
 
 #if CONFIG_APP_FEATURE_XIAOZHI

@@ -9,6 +9,14 @@
 
 #include "app_config.h"
 
+/* Motion-detection zone in percent of the frame (0..100). */
+typedef struct {
+    int x;
+    int y;
+    int w;
+    int h;
+} runtime_motion_zone_t;
+
 typedef struct {
     char wifi_ssid[APP_WIFI_SSID_MAX_LEN];
     char wifi_password[APP_WIFI_PASSWORD_MAX_LEN];
@@ -42,6 +50,34 @@ typedef struct {
     bool camera_hflip;
     bool camera_vflip;
     bool camera_stream_enabled; /* MJPEG live stream for HA (http://<ip>/api/camera/stream) */
+    int camera_resolution;      /* 0 = Full HD (1920x1080), 1 = HD Ready (960x540) */
+
+    /* Camera motion-detector tuning (zones + debounce + lighting filter). */
+    int camera_motion_min_area;        /* 0..100 % of active cells, 0 = off */
+    int camera_motion_min_duration_ms; /* 0..1000 ms, 0 = off */
+    int camera_motion_cooldown_ms;     /* 0..30000 ms between two wake-ups */
+    int camera_motion_start_delay_ms;  /* 0..10000 ms grace after start */
+    bool camera_motion_ignore_lighting;
+    int camera_motion_zone_count;      /* 0..4, 0 = whole frame */
+    runtime_motion_zone_t camera_motion_zones[4];
+
+    /* Local camera: manual ISP image calibration. The master switch drives the
+     * basic blocks (brightness/contrast/saturation/hue/tone); the three "auto"
+     * flags keep the matching block under IPA control (switch off = manual). */
+    bool camera_img_manual;
+    bool camera_img_wb_manual;
+    bool camera_img_sharpen_manual;
+    bool camera_img_denoise_manual;
+    int camera_img_brightness;      /* -128..127, 0 = neutral */
+    int camera_img_contrast;        /* 0..255, 128 = neutral */
+    int camera_img_saturation;      /* 0..255, 128 = neutral */
+    int camera_img_hue;             /* 0..360, 0 = neutral */
+    int camera_img_wb_red;          /* 50..200 %, 100 = neutral */
+    int camera_img_wb_blue;         /* 50..200 %, 100 = neutral */
+    int camera_img_sharpen;         /* 25..300 %, 100 = neutral */
+    int camera_img_denoise;         /* 25..200 %, 100 = neutral */
+    int camera_img_tone_shadows;    /* -100..100 %, 0 = neutral */
+    int camera_img_tone_highlights; /* -100..100 %, 0 = neutral */
 
     /* SD logging. */
     int sd_flush_interval_s; /* 5..300 */
@@ -61,6 +97,21 @@ void runtime_settings_set_defaults(runtime_settings_t *out);
 esp_err_t runtime_settings_init(void);
 esp_err_t runtime_settings_load(runtime_settings_t *out);
 esp_err_t runtime_settings_save(const runtime_settings_t *settings);
+/**
+ * @brief Push the manual ISP image calibration to the camera pipeline.
+ *
+ * Has to be called after a settings change (and once after the settings were
+ * loaded), the calibration itself lives outside of the settings struct and is
+ * re-applied by the ISP task on every frame. No-op when the local camera
+ * feature is disabled.
+ */
+esp_err_t runtime_settings_apply_image_calibration(const runtime_settings_t *settings);
+/**
+ * @brief Push the motion-detector tuning (zones, debounce, cooldown, filters)
+ * into the camera component.  Safe to call before the camera is started; the
+ * values persist in the component state.  No-op when local camera is disabled.
+ */
+esp_err_t runtime_settings_apply_motion_config(const runtime_settings_t *settings);
 bool runtime_settings_has_wifi(const runtime_settings_t *settings);
 bool runtime_settings_has_ha(const runtime_settings_t *settings);
 bool runtime_settings_has_xiaozhi(const runtime_settings_t *settings);

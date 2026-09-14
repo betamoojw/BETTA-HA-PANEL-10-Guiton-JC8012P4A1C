@@ -29,6 +29,7 @@ typedef struct {
     bool screensaver_enabled;      /* show graphic screensaver instead of OFF */
     int screensaver_brightness_percent; /* backlight while screensaver is shown */
     bool screensaver_clock_enabled; /* show the clock overlay on the screensaver */
+    char screensaver_wallpaper[64]; /* PNG filename under /sdcard/bg ("" = screensaver.png) */
 } display_power_config_t;
 
 void display_get_power_config(display_power_config_t *out);

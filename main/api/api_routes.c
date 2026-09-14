@@ -129,6 +129,11 @@ static esp_err_t guarded_api_camera_local_status_get(httpd_req_t *req)
     return http_guard_handle(req, api_camera_local_status_get_handler);
 }
 
+static esp_err_t guarded_api_camera_local_motion_get(httpd_req_t *req)
+{
+    return http_guard_handle(req, api_camera_local_motion_get_handler);
+}
+
 static esp_err_t guarded_api_camera_local_stream_get(httpd_req_t *req)
 {
     return http_guard_handle(req, api_camera_local_stream_get_handler);
@@ -410,6 +415,12 @@ esp_err_t api_routes_register(httpd_handle_t server)
         .handler = guarded_api_camera_local_status_get,
         .user_ctx = NULL,
     };
+    httpd_uri_t get_camera_local_motion = {
+        .uri = "/api/camera/motion",
+        .method = HTTP_GET,
+        .handler = guarded_api_camera_local_motion_get,
+        .user_ctx = NULL,
+    };
     httpd_uri_t get_camera_local_stream = {
         .uri = "/api/camera/stream",
         .method = HTTP_GET,
@@ -536,6 +547,8 @@ esp_err_t api_routes_register(httpd_handle_t server)
         httpd_register_uri_handler(server, &get_camera_local_snapshot), "api_routes", "GET /api/camera/snapshot");
     ESP_RETURN_ON_ERROR(
         httpd_register_uri_handler(server, &get_camera_local_status), "api_routes", "GET /api/camera/status");
+    ESP_RETURN_ON_ERROR(
+        httpd_register_uri_handler(server, &get_camera_local_motion), "api_routes", "GET /api/camera/motion");
     ESP_RETURN_ON_ERROR(
         httpd_register_uri_handler(server, &get_camera_local_stream), "api_routes", "GET /api/camera/stream");
 #endif

@@ -276,6 +276,34 @@ static cJSON *backup_settings_to_json(const runtime_settings_t *s)
     cJSON_AddBoolToObject(camera, "hflip", s->camera_hflip);
     cJSON_AddBoolToObject(camera, "vflip", s->camera_vflip);
     cJSON_AddBoolToObject(camera, "stream_enabled", s->camera_stream_enabled);
+    cJSON_AddNumberToObject(camera, "resolution", s->camera_resolution);
+
+    cJSON *camera_motion = cJSON_CreateObject();
+    cJSON *motion_zones = cJSON_CreateArray();
+    if (camera_motion != NULL && motion_zones != NULL) {
+        cJSON_AddNumberToObject(camera_motion, "min_area", s->camera_motion_min_area);
+        cJSON_AddNumberToObject(camera_motion, "min_duration_ms", s->camera_motion_min_duration_ms);
+        cJSON_AddNumberToObject(camera_motion, "cooldown_ms", s->camera_motion_cooldown_ms);
+        cJSON_AddNumberToObject(camera_motion, "start_delay_ms", s->camera_motion_start_delay_ms);
+        cJSON_AddBoolToObject(camera_motion, "ignore_lighting", s->camera_motion_ignore_lighting);
+        for (int i = 0; i < s->camera_motion_zone_count && i < 4; i++) {
+            cJSON *zone = cJSON_CreateObject();
+            if (zone == NULL) {
+                break;
+            }
+            cJSON_AddNumberToObject(zone, "x", s->camera_motion_zones[i].x);
+            cJSON_AddNumberToObject(zone, "y", s->camera_motion_zones[i].y);
+            cJSON_AddNumberToObject(zone, "w", s->camera_motion_zones[i].w);
+            cJSON_AddNumberToObject(zone, "h", s->camera_motion_zones[i].h);
+            cJSON_AddItemToArray(motion_zones, zone);
+        }
+        cJSON_AddItemToObject(camera_motion, "zones", motion_zones);
+        cJSON_AddItemToObject(camera, "motion", camera_motion);
+    } else {
+        cJSON_Delete(camera_motion);
+        cJSON_Delete(motion_zones);
+    }
+
     cJSON_AddItemToObject(root, "camera", camera);
 
     cJSON_AddNumberToObject(system, "daily_restart_hour", s->daily_restart_hour);
@@ -356,6 +384,42 @@ static void backup_settings_from_json(cJSON *root, runtime_settings_t *s)
         backup_json_get_bool(camera, "hflip", &s->camera_hflip);
         backup_json_get_bool(camera, "vflip", &s->camera_vflip);
         backup_json_get_bool(camera, "stream_enabled", &s->camera_stream_enabled);
+        backup_json_get_int(camera, "resolution", &s->camera_resolution, 0, 1);
+
+        cJSON *motion = cJSON_GetObjectItemCaseSensitive(camera, "motion");
+        if (cJSON_IsObject(motion)) {
+            backup_json_get_int(motion, "min_area", &s->camera_motion_min_area, 0, 100);
+            backup_json_get_int(motion, "min_duration_ms", &s->camera_motion_min_duration_ms, 0, 1000);
+            backup_json_get_int(motion, "cooldown_ms", &s->camera_motion_cooldown_ms, 0, 30000);
+            backup_json_get_int(motion, "start_delay_ms", &s->camera_motion_start_delay_ms, 0, 10000);
+            backup_json_get_bool(motion, "ignore_lighting", &s->camera_motion_ignore_lighting);
+
+            cJSON *zones = cJSON_GetObjectItemCaseSensitive(motion, "zones");
+            if (cJSON_IsArray(zones)) {
+                int count = 0;
+                const int total = cJSON_GetArraySize(zones);
+                for (int i = 0; i < total && count < 4; i++) {
+                    cJSON *zone = cJSON_GetArrayItem(zones, i);
+                    if (!cJSON_IsObject(zone)) {
+                        continue;
+                    }
+                    int x = 0, y = 0, w = 0, h = 0;
+                    backup_json_get_int(zone, "x", &x, 0, 100);
+                    backup_json_get_int(zone, "y", &y, 0, 100);
+                    backup_json_get_int(zone, "w", &w, 0, 100);
+                    backup_json_get_int(zone, "h", &h, 0, 100);
+                    if (w <= 0 || h <= 0) {
+                        continue;
+                    }
+                    s->camera_motion_zones[count].x = x;
+                    s->camera_motion_zones[count].y = y;
+                    s->camera_motion_zones[count].w = w;
+                    s->camera_motion_zones[count].h = h;
+                    count++;
+                }
+                s->camera_motion_zone_count = count;
+            }
+        }
     }
 
     cJSON *system = cJSON_GetObjectItemCaseSensitive(root, "system");
@@ -392,6 +456,7 @@ static cJSON *backup_display_to_json(const display_power_config_t *c)
     cJSON_AddBoolToObject(o, "screensaver_enabled", c->screensaver_enabled);
     cJSON_AddNumberToObject(o, "screensaver_brightness_percent", c->screensaver_brightness_percent);
     cJSON_AddBoolToObject(o, "screensaver_clock_enabled", c->screensaver_clock_enabled);
+    cJSON_AddStringToObject(o, "screensaver_wallpaper", c->screensaver_wallpaper);
     return o;
 }
 
@@ -418,6 +483,7 @@ static void backup_display_from_json(cJSON *o, display_power_config_t *c)
     backup_json_get_bool(o, "night_mode_enabled", &c->night_mode_enabled);
     backup_json_get_bool(o, "screensaver_enabled", &c->screensaver_enabled);
     backup_json_get_bool(o, "screensaver_clock_enabled", &c->screensaver_clock_enabled);
+    backup_json_get_string(o, "screensaver_wallpaper", c->screensaver_wallpaper, sizeof(c->screensaver_wallpaper));
 }
 
 /* ------------------------------------------------------------------ */

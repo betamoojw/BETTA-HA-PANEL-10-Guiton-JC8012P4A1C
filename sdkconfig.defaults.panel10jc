@@ -46,24 +46,40 @@ CONFIG_ESP32P4_REV_MIN_100=y
 
 # --- Feature toggles for the JC panel ---
 # Xiaozhi voice assistant is enabled (ES8311 mono mic + speaker).
-# Remote camera store (web editor cameras page) is off; the JC panel has no
-# RTSP cameras.  The built-in MIPI-CSI camera is DISABLED (bootloop
-# workaround: the camera path overflowed the main task stack during
-# dashboard init).
-CONFIG_APP_FEATURE_CAMERAS=n
+# Remote camera store (web editor cameras page) is enabled so /api/cameras
+# is served; the JC panel has no RTSP cameras but the web UI still polls it.
+# The built-in OV02C10 MIPI-CSI camera is ENABLED.  Its start was moved to a
+# dedicated boot task (app_main.c) so the 8KB main task stack is no longer
+# exhausted during dashboard init (the original bootloop cause).
+CONFIG_APP_FEATURE_CAMERAS=y
 CONFIG_APP_FEATURE_XIAOZHI=y
-CONFIG_APP_FEATURE_LOCAL_CAMERA=n
+CONFIG_APP_FEATURE_LOCAL_CAMERA=y
 
-# --- Built-in OV02C10 MIPI-CSI camera: disabled ---
+# --- Built-in OV02C10 MIPI-CSI camera: enabled ---
+# 1288x728 (native OV02C10 16:9 crop) instead of 1920x1080: ~2.2x less MIPI
+# bandwidth and half the PSRAM per capture buffer. 1080p + ESP-Hosted WiFi
+# exhausts the internal DMA heap ("STA TX buffer alloc failed") and eventually
+# PANICs; 1288x728 is also a near-native fit for the 1280x800 panel.
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
-CONFIG_CAMERA_OV02C10=n
+CONFIG_CAMERA_OV02C10=y
+CONFIG_CAMERA_OV02C10_MIPI_RAW10_1288X728_30FPS=y
+CONFIG_CAMERA_OV02C10_MIPI_DEFAULT_FMT_RAW10_1288X728_30FPS=y
 
-# --- ESP Video framework (V4L2 MIPI-CSI stack): disabled with the camera ---
-CONFIG_ESP_VIDEO_ENABLE_ISP=n
-CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=n
-CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=n
+# --- ESP Video framework (V4L2 MIPI-CSI stack): enabled with the camera ---
+# The video device registers a /dev/videoX VFS node; the panel already mounts
+# several filesystems (FATFS SD, web assets, etc.), so the default 8 VFS slots
+# are exhausted and esp_video_init fails with
+# "Failed to register video VFS dev name=video0".  Bump the limit (esp_video's
+# own examples use 10-16).
+CONFIG_VFS_MAX_COUNT=16
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
+CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=y
+# The ISP pipeline controller is what binds the MIPI-CSI device to the ISP on
+# ESP32-P4: without it the RAW10 OV02C10 frames are never converted to RGB565
+# and /dev/video0 delivers no frames (camera "running" but never ready).
+# esp_video's own ESP32-P4 examples enable this.
+CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=y
 CONFIG_ESP_VIDEO_ENABLE_DATA_PREPROCESSING=n
-CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=n
 CONFIG_ESP_VIDEO_DISABLE_MIPI_CSI_DRIVER_BACKUP_BUFFER=y
 CONFIG_ESP_VIDEO_ENABLE_SWAP_SHORT=n
 CONFIG_ESP_VIDEO_ENABLE_SWAP_BYTE=n

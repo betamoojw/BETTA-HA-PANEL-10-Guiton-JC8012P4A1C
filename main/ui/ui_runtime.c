@@ -919,9 +919,6 @@ esp_err_t ui_runtime_load_layout(const char *layout_json)
 #if CONFIG_APP_FEATURE_XIAOZHI
     bool has_xiaozhi_page = false;
 #endif
-#if CONFIG_APP_FEATURE_CAMERAS
-    bool has_cameras_page = false;
-#endif
     for (int p = 0; p < page_count; p++) {
         cJSON *page = cJSON_GetArrayItem(pages, p);
         cJSON *page_id = cJSON_GetObjectItemCaseSensitive(page, "id");
@@ -971,7 +968,6 @@ esp_err_t ui_runtime_load_layout(const char *layout_json)
         bool is_cameras_page = cJSON_IsString(page_type) && page_type->valuestring != NULL &&
                                strcmp(page_type->valuestring, "cameras") == 0;
         if (is_cameras_page) {
-            has_cameras_page = true;
             ui_cameras_page_build(page_container, page_id->valuestring);
             continue;
         }
@@ -1013,17 +1009,6 @@ esp_err_t ui_runtime_load_layout(const char *layout_json)
         lv_obj_t *xz_container = ui_pages_add("xiaozhi", "Xiaozhi");
         if (xz_container != NULL) {
             xz_ui_build(xz_container);
-        }
-    }
-#endif
-
-#if CONFIG_APP_FEATURE_CAMERAS
-    /* Same guarantee for the cameras page: always provide the tab so cameras
-     * configured in the web editor have a home even in older layouts. */
-    if (!has_cameras_page) {
-        lv_obj_t *cam_container = ui_pages_add("cameras", ui_i18n_get("page.cameras", "Kamery"));
-        if (cam_container != NULL) {
-            ui_cameras_page_build(cam_container, "cameras");
         }
     }
 #endif

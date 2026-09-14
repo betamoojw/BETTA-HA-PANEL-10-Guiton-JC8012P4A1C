@@ -89,7 +89,7 @@
 | Variant macro / Makro         | `CONFIG_APP_PANEL_VARIANT_10INCH_JC`                                            |
 | Build preset / Predefiniowany | `panel10jc`                                                                     |
 | Static IP / IP statyczne      | ostatni oktet `.36` (configurable / konfigurowalne)                              |
-| Cameras / Kamery              | ❌ disabled / wyłączone                                                          |
+| Camera / Kamera                | ✅ built-in OV02C10 (snapshot + motion wake + MJPEG); IP cameras enabled / wbudowana OV02C10 (zdjęcie + budzenie ruchem + MJPEG); kamery IP włączone |
 | Xiaozhi AI                    | ⚠️ built-in, off by default / wkompilowane, domyślnie wyłączone                |
 
 ---
@@ -163,6 +163,7 @@ Edytor ma dwie zakładki: **Układ** (strony, kafelki, inspektor) i **Ustawienia
 | **Wi-Fi** — SSID, password, country, BSSID lock, scan | **Wi-Fi** — SSID, hasło, kraj, blokada BSSID, skanowanie |
 | **Home Assistant** — URL + long-lived token | **Home Assistant** — URL + token długoterminowy |
 | **Xiaozhi AI** — built in, off by default (enable in Settings → Xiaozhi AI + cloud pairing) | **Xiaozhi AI** — wkompilowane, domyślnie wyłączone (włącz w Ustawienia → Xiaozhi AI + parowanie z chmurą) |
+| **Camera / Kamera** — built-in OV02C10: on/off, motion wake, sensitivity, JPEG quality, flip, MJPEG stream, motion zones | **Kamera** — wbudowana OV02C10: włącz/wyłącz, budzenie ruchem, czułość, jakość JPEG, odbicie, strumień MJPEG, strefy ruchu |
 | **SD card** — mount, storage, config backup | **Karta SD** — montowanie, pamięć, backup konfiguracji |
 | **Time** — NTP/timezone | **Czas** — NTP/strefa czasowa |
 | **Interface** — language, UI scale, fonts | **Interfejs** — język, skalowanie UI, czcionki |
@@ -175,12 +176,64 @@ Edytor ma dwie zakładki: **Układ** (strony, kafelki, inspektor) i **Ustawienia
 
 ---
 
+## 📷 Built-in camera / Wbudowana kamera
+
+**EN** — The panel has a built-in **OV02C10** MIPI-CSI camera used for motion
+detection (screen wake) and live preview. It is compiled in
+(`APP_FEATURE_LOCAL_CAMERA=y`) and configured in **Settings → Camera**.
+
+Endpoints (replace `<ip>` with the panel address):
+- `GET http://<ip>/api/camera/snapshot` — JPEG snapshot
+- `GET http://<ip>/api/camera/status` — JSON status (running, resolution, quality, flips)
+- `GET http://<ip>/api/camera/motion` — live motion diagnostics (level, changed %, zones)
+- `GET http://<ip>/api/camera/stream` — MJPEG stream (~2 fps, enable **Stream** first)
+
+Motion settings:
+
+| Setting | Range | Default | Description |
+|---|---|---|---|
+| Sensitivity (`motion_threshold`) | 1–64 | 8 | Lower = more sensitive (frame-difference) |
+| Min change area (`min_area`) | 0–100 % | 0 | Minimum % of frame that must change |
+| Min duration (`min_duration_ms`) | 0–1000 ms | 0 | Motion must last this long to count |
+| Cooldown (`cooldown_ms`) | 0–30000 ms | 1000 | Block re-wake for this long |
+| Start delay (`start_delay_ms`) | 0–10000 ms | 2000 | Ignore motion right after camera starts |
+| Ignore lighting (`ignore_lighting`) | bool | on | Ignore global brightness changes |
+| Zones (`zones`) | up to 4 | none | Rectangles `{x,y,w,h}` (0–100 %); only motion inside them counts |
+| JPEG quality (`jpeg_quality`) | 10–95 | 55 | Snapshot/stream quality |
+| H/V flip (`hflip`, `vflip`) | bool | off | Mirror image |
+
+**PL** — Panel ma wbudowaną kamerę **OV02C10** (MIPI-CSI) do detekcji ruchu
+(budzenie ekranu) i podglądu. Jest wkompilowana (`APP_FEATURE_LOCAL_CAMERA=y`)
+i konfigurowana w **Ustawienia → Kamera**.
+
+Endpointy (zamiast `<ip>` wpisz adres panelu):
+- `GET http://<ip>/api/camera/snapshot` — zdjęcie JPEG
+- `GET http://<ip>/api/camera/status` — status JSON (działanie, rozdzielczość, jakość, odbicia)
+- `GET http://<ip>/api/camera/motion` — diagnostyka ruchu na żywo (poziom, % zmiany, strefy)
+- `GET http://<ip>/api/camera/stream` — strumień MJPEG (~2 fps, najpierw włącz **Strumień**)
+
+Ustawienia ruchu:
+
+| Ustawienie | Zakres | Domyślnie | Opis |
+|---|---|---|---|
+| Czułość (`motion_threshold`) | 1–64 | 8 | Niżej = bardziej czułe (różnica klatek) |
+| Min. obszar zmiany (`min_area`) | 0–100 % | 0 | Minimalny % kadru, który musi się zmienić |
+| Min. czas (`min_duration_ms`) | 0–1000 ms | 0 | Ruch musi trwać tyle, by został uznany |
+| Cooldown (`cooldown_ms`) | 0–30000 ms | 1000 | Blokada ponownego wybudzenia na ten czas |
+| Opóźnienie startu (`start_delay_ms`) | 0–10000 ms | 2000 | Ignoruj ruch zaraz po starcie kamery |
+| Ignoruj oświetlenie (`ignore_lighting`) | bool | włącz | Ignoruj globalne zmiany jasności |
+| Strefy (`zones`) | do 4 | brak | Prostokąty `{x,y,w,h}` (0–100 %); liczy się ruch tylko w nich |
+| Jakość JPEG (`jpeg_quality`) | 10–95 | 55 | Jakość zdjęć/strumienia |
+| Odbicie H/V (`hflip`, `vflip`) | bool | wył. | Odbicie lustrzane obrazu |
+
+---
+
 ## ⚖️ License & attribution / Licencja i atrybucja
 
 - **License / Licencja:** [LicenseRef-FNCL-1.1 (Federation Non-Commercial License v1.1)](LICENSE) — **non-commercial** use. Commercial use requires a separate written license from the copyright holder. See [`LICENSE`](LICENSE).
 - **Copyright:** `Copyright (c) 2026 Cpt_Kirk`.
 - **Upstream / Źródło:** this is a port/extension of **[BETTA-HA-PANEL](https://github.com/cptkirki/BETTA-HA-PANEL)** by **Cpt_Kirk (cptkirki)**. All original work and branding remain theirs. See [`README.UPSTREAM.md`](README.UPSTREAM.md).
-- **This variant / Ten wariant:** `panel10jc` for Guition **JC8012P4A1C-I-W-Y** — cameras removed, panel-specific drivers added (JD9365 DSI, GSL3680 touch), graphical screensaver, extended settings and a scaled entity model (3600 entities). Xiaozhi is compiled in but **disabled by default** (enable in Settings → Xiaozhi AI + cloud pairing). Full change history in [`release-notes.md`](release-notes.md).
+- **This variant / Ten wariant:** `panel10jc` for Guition **JC8012P4A1C-I-W-Y** — built-in OV02C10 camera (motion wake + snapshot + MJPEG), panel-specific drivers (JD9365 DSI, GSL3680 touch), graphical screensaver, extended settings and a scaled entity model (3600 entities). Xiaozhi is compiled in but **disabled by default** (enable in Settings → Xiaozhi AI + cloud pairing). Full change history in [`release-notes.md`](release-notes.md).
 
 > **PL:** Projekt udostępniany na licencji **FNCL-1.1 (niekomercyjnej)** — wykorzystanie komercyjne wymaga osobnej pisemnej licencji od autora. To port/rozszerzenie **BETTA-HA-PANEL** autorstwa **Cpt_Kirk (cptkirki)**; cała oryginalna praca i nazwa należą do niego.
 

@@ -47,6 +47,11 @@ dependencies:
   # built-in OV02C10 MIPI-CSI camera; its sensor driver is vendored under
   # components/esp_cam_sensor (2.1.0, matching the official Guition demo), so
   # esp_video's `esp_cam_sensor 2.*` dependency is satisfied locally.
+  # esp_video ITSELF is also vendored under components/esp_video (same short
+  # name overrides the registry package) so we can hook
+  # esp_video_isp_manual_apply() into the ISP pipeline task for the manual
+  # image-calibration sliders (brightness/contrast/saturation/hue/WB/sharpen/
+  # denoise/tone). Keep the vendored copy in sync with ~2.0.
   espressif/esp_video:
     version: "~2.0"
     public: true

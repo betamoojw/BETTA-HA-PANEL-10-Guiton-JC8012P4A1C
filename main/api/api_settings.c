@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "cJSON.h"
 #include "esp_system.h"
@@ -21,6 +22,9 @@
 #include "net/wifi_mgr.h"
 #include "settings/i18n_store.h"
 #include "settings/runtime_settings.h"
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+#include "camera/local_camera.h"
+#endif
 
 static esp_timer_handle_t s_restart_timer = NULL;
 
@@ -30,6 +34,17 @@ static void set_json_headers(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 }
+
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+/* Built-in camera motion-wake routes to the display's activity notifier so a
+ * detected movement lights the screen back up, no matter which UI (WWW or
+ * on-panel settings) started the camera. */
+static void api_camera_motion_wake_cb(void *user_data)
+{
+    (void)user_data;
+    display_note_activity();
+}
+#endif
 
 static esp_err_t send_json_error(httpd_req_t *req, const char *status, const char *message)
 {
@@ -245,11 +260,13 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
     cJSON *sd = cJSON_CreateObject();
     cJSON *network = cJSON_CreateObject();
     cJSON *camera = cJSON_CreateObject();
+    cJSON *camera_image = cJSON_CreateObject();
     cJSON *system = cJSON_CreateObject();
     cJSON *audio = cJSON_CreateObject();
     cJSON *display = cJSON_CreateObject();
     if (root == NULL || wifi == NULL || ha == NULL || time_cfg == NULL || ui == NULL || xiaozhi == NULL ||
-        sd == NULL || network == NULL || camera == NULL || system == NULL || audio == NULL || display == NULL) {
+        sd == NULL || network == NULL || camera == NULL || camera_image == NULL || system == NULL ||
+        audio == NULL || display == NULL) {
         cJSON_Delete(root);
         cJSON_Delete(wifi);
         cJSON_Delete(ha);
@@ -259,6 +276,7 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
         cJSON_Delete(sd);
         cJSON_Delete(network);
         cJSON_Delete(camera);
+        cJSON_Delete(camera_image);
         cJSON_Delete(system);
         cJSON_Delete(audio);
         cJSON_Delete(display);
@@ -341,6 +359,50 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(camera, "hflip", settings->camera_hflip);
     cJSON_AddBoolToObject(camera, "vflip", settings->camera_vflip);
     cJSON_AddBoolToObject(camera, "stream_enabled", settings->camera_stream_enabled);
+    cJSON_AddNumberToObject(camera, "resolution", (double)settings->camera_resolution);
+
+    cJSON *camera_motion = cJSON_CreateObject();
+    cJSON *motion_zones = cJSON_CreateArray();
+    if (camera_motion != NULL && motion_zones != NULL) {
+        cJSON_AddNumberToObject(camera_motion, "min_area", (double)settings->camera_motion_min_area);
+        cJSON_AddNumberToObject(camera_motion, "min_duration_ms", (double)settings->camera_motion_min_duration_ms);
+        cJSON_AddNumberToObject(camera_motion, "cooldown_ms", (double)settings->camera_motion_cooldown_ms);
+        cJSON_AddNumberToObject(camera_motion, "start_delay_ms", (double)settings->camera_motion_start_delay_ms);
+        cJSON_AddBoolToObject(camera_motion, "ignore_lighting", settings->camera_motion_ignore_lighting);
+        for (int i = 0; i < settings->camera_motion_zone_count && i < 4; i++) {
+            cJSON *zone = cJSON_CreateObject();
+            if (zone == NULL) {
+                break;
+            }
+            cJSON_AddNumberToObject(zone, "x", (double)settings->camera_motion_zones[i].x);
+            cJSON_AddNumberToObject(zone, "y", (double)settings->camera_motion_zones[i].y);
+            cJSON_AddNumberToObject(zone, "w", (double)settings->camera_motion_zones[i].w);
+            cJSON_AddNumberToObject(zone, "h", (double)settings->camera_motion_zones[i].h);
+            cJSON_AddItemToArray(motion_zones, zone);
+        }
+        cJSON_AddItemToObject(camera_motion, "zones", motion_zones);
+        cJSON_AddItemToObject(camera, "motion", camera_motion);
+    } else {
+        cJSON_Delete(camera_motion);
+        cJSON_Delete(motion_zones);
+    }
+
+    cJSON_AddBoolToObject(camera_image, "manual", settings->camera_img_manual);
+    cJSON_AddBoolToObject(camera_image, "wb_manual", settings->camera_img_wb_manual);
+    cJSON_AddBoolToObject(camera_image, "sharpen_manual", settings->camera_img_sharpen_manual);
+    cJSON_AddBoolToObject(camera_image, "denoise_manual", settings->camera_img_denoise_manual);
+    cJSON_AddNumberToObject(camera_image, "brightness", (double)settings->camera_img_brightness);
+    cJSON_AddNumberToObject(camera_image, "contrast", (double)settings->camera_img_contrast);
+    cJSON_AddNumberToObject(camera_image, "saturation", (double)settings->camera_img_saturation);
+    cJSON_AddNumberToObject(camera_image, "hue", (double)settings->camera_img_hue);
+    cJSON_AddNumberToObject(camera_image, "wb_red", (double)settings->camera_img_wb_red);
+    cJSON_AddNumberToObject(camera_image, "wb_blue", (double)settings->camera_img_wb_blue);
+    cJSON_AddNumberToObject(camera_image, "sharpen", (double)settings->camera_img_sharpen);
+    cJSON_AddNumberToObject(camera_image, "denoise", (double)settings->camera_img_denoise);
+    cJSON_AddNumberToObject(camera_image, "tone_shadows", (double)settings->camera_img_tone_shadows);
+    cJSON_AddNumberToObject(camera_image, "tone_highlights", (double)settings->camera_img_tone_highlights);
+    cJSON_AddItemToObject(camera, "image", camera_image);
+
     cJSON_AddItemToObject(root, "camera", camera);
 
     cJSON_AddNumberToObject(system, "daily_restart_hour", (double)settings->daily_restart_hour);
@@ -362,6 +424,7 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(display, "screensaver_enabled", power.screensaver_enabled);
     cJSON_AddNumberToObject(display, "screensaver_brightness", (double)power.screensaver_brightness_percent);
     cJSON_AddBoolToObject(display, "screensaver_clock_enabled", power.screensaver_clock_enabled);
+    cJSON_AddStringToObject(display, "screensaver_wallpaper", power.screensaver_wallpaper);
     cJSON_AddItemToObject(root, "display", display);
 
     cJSON_AddBoolToObject(root, "ok", true);
@@ -454,6 +517,32 @@ static bool update_int_setting(cJSON *obj, const char *key, int *dst, int min, i
         *out_invalid_type = true;
     }
     return false;
+}
+
+/* Screensaver wallpapers live under /sdcard/bg and are decoded by the
+ * PNG-only loader, so accept only a plain basename ending in .png. Rejecting
+ * path separators also blocks traversal outside the wallpaper directory. */
+static bool screensaver_wallpaper_name_valid(const char *name)
+{
+    if (name == NULL || name[0] == '\0') {
+        return true; /* empty = default /sdcard/bg/screensaver.png */
+    }
+    const size_t n = strlen(name);
+    if (n == 0 || n >= 64) {
+        return false;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const unsigned char ch = (unsigned char)name[i];
+        if (isalnum(ch) || ch == '-' || ch == '_' || ch == '.') {
+            continue;
+        }
+        return false;
+    }
+    const char *dot = strrchr(name, '.');
+    if (dot == NULL) {
+        return false;
+    }
+    return strcasecmp(dot, ".png") == 0;
 }
 
 esp_err_t api_settings_put_handler(httpd_req_t *req)
@@ -624,6 +713,60 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
         (void)update_bool_setting(camera, "hflip", &settings->camera_hflip, &invalid_type);
         (void)update_bool_setting(camera, "vflip", &settings->camera_vflip, &invalid_type);
         (void)update_bool_setting(camera, "stream_enabled", &settings->camera_stream_enabled, &invalid_type);
+        (void)update_int_setting(camera, "resolution", &settings->camera_resolution, 0, 1, &invalid_type);
+
+        cJSON *motion = cJSON_GetObjectItemCaseSensitive(camera, "motion");
+        if (cJSON_IsObject(motion)) {
+            (void)update_int_setting(motion, "min_area", &settings->camera_motion_min_area, 0, 100, &invalid_type);
+            (void)update_int_setting(motion, "min_duration_ms", &settings->camera_motion_min_duration_ms, 0, 1000, &invalid_type);
+            (void)update_int_setting(motion, "cooldown_ms", &settings->camera_motion_cooldown_ms, 0, 30000, &invalid_type);
+            (void)update_int_setting(motion, "start_delay_ms", &settings->camera_motion_start_delay_ms, 0, 10000, &invalid_type);
+            (void)update_bool_setting(motion, "ignore_lighting", &settings->camera_motion_ignore_lighting, &invalid_type);
+
+            cJSON *zones = cJSON_GetObjectItemCaseSensitive(motion, "zones");
+            if (cJSON_IsArray(zones)) {
+                int count = 0;
+                const int total = cJSON_GetArraySize(zones);
+                for (int i = 0; i < total && count < 4; i++) {
+                    cJSON *zone = cJSON_GetArrayItem(zones, i);
+                    if (!cJSON_IsObject(zone)) {
+                        continue;
+                    }
+                    int x = 0, y = 0, w = 0, h = 0;
+                    (void)update_int_setting(zone, "x", &x, 0, 100, &invalid_type);
+                    (void)update_int_setting(zone, "y", &y, 0, 100, &invalid_type);
+                    (void)update_int_setting(zone, "w", &w, 0, 100, &invalid_type);
+                    (void)update_int_setting(zone, "h", &h, 0, 100, &invalid_type);
+                    if (w <= 0 || h <= 0) {
+                        continue;
+                    }
+                    settings->camera_motion_zones[count].x = x;
+                    settings->camera_motion_zones[count].y = y;
+                    settings->camera_motion_zones[count].w = w;
+                    settings->camera_motion_zones[count].h = h;
+                    count++;
+                }
+                settings->camera_motion_zone_count = count;
+            }
+        }
+
+        cJSON *image = cJSON_GetObjectItemCaseSensitive(camera, "image");
+        if (cJSON_IsObject(image)) {
+            (void)update_bool_setting(image, "manual", &settings->camera_img_manual, &invalid_type);
+            (void)update_bool_setting(image, "wb_manual", &settings->camera_img_wb_manual, &invalid_type);
+            (void)update_bool_setting(image, "sharpen_manual", &settings->camera_img_sharpen_manual, &invalid_type);
+            (void)update_bool_setting(image, "denoise_manual", &settings->camera_img_denoise_manual, &invalid_type);
+            (void)update_int_setting(image, "brightness", &settings->camera_img_brightness, -128, 127, &invalid_type);
+            (void)update_int_setting(image, "contrast", &settings->camera_img_contrast, 0, 255, &invalid_type);
+            (void)update_int_setting(image, "saturation", &settings->camera_img_saturation, 0, 255, &invalid_type);
+            (void)update_int_setting(image, "hue", &settings->camera_img_hue, 0, 360, &invalid_type);
+            (void)update_int_setting(image, "wb_red", &settings->camera_img_wb_red, 50, 200, &invalid_type);
+            (void)update_int_setting(image, "wb_blue", &settings->camera_img_wb_blue, 50, 200, &invalid_type);
+            (void)update_int_setting(image, "sharpen", &settings->camera_img_sharpen, 25, 300, &invalid_type);
+            (void)update_int_setting(image, "denoise", &settings->camera_img_denoise, 25, 200, &invalid_type);
+            (void)update_int_setting(image, "tone_shadows", &settings->camera_img_tone_shadows, -100, 100, &invalid_type);
+            (void)update_int_setting(image, "tone_highlights", &settings->camera_img_tone_highlights, -100, 100, &invalid_type);
+        }
     }
     if (cJSON_IsObject(system)) {
         (void)update_int_setting(system, "daily_restart_hour", &settings->daily_restart_hour, -1, 23, &invalid_type);
@@ -668,6 +811,14 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
             power.screensaver_brightness_percent = value;
         }
         (void)update_bool_setting(display, "screensaver_clock_enabled", &power.screensaver_clock_enabled, &invalid_type);
+        char wallpaper[64] = {0};
+        if (update_string_setting(display, "screensaver_wallpaper", wallpaper, sizeof(wallpaper), &invalid_type, &too_long)) {
+            if (screensaver_wallpaper_name_valid(wallpaper)) {
+                strlcpy(power.screensaver_wallpaper, wallpaper, sizeof(power.screensaver_wallpaper));
+            } else {
+                invalid_type = true;
+            }
+        }
         display_set_power_config(&power);
     }
 
@@ -773,7 +924,22 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
     bool touch_test = settings->touch_test;
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
     bool camera_stream_enabled = settings->camera_stream_enabled;
+    bool camera_enabled = settings->camera_enabled;
+    bool camera_motion_wake = settings->camera_motion_wake;
+    uint8_t camera_motion_threshold = (uint8_t)settings->camera_motion_threshold;
+    uint8_t camera_jpeg_quality = (uint8_t)settings->camera_jpeg_quality;
+    bool camera_hflip = settings->camera_hflip;
+    bool camera_vflip = settings->camera_vflip;
+    int camera_resolution = settings->camera_resolution;
 #endif
+    if (save_err == ESP_OK) {
+        /* The manual ISP calibration lives in the camera component, not in the
+         * settings struct, so it has to be handed over before the copy is freed. */
+        (void)runtime_settings_apply_image_calibration(settings);
+        /* Motion tuning (zones/debounce/cooldown) likewise lives in the camera
+         * component; it is safe to apply before the pipeline is (re)started. */
+        (void)runtime_settings_apply_motion_config(settings);
+    }
     free(settings);
     if (save_err != ESP_OK) {
         return httpd_resp_send_500(req);
@@ -786,6 +952,12 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
     touch_debug_set_enabled(touch_test);
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
     api_camera_local_set_stream_enabled(camera_stream_enabled);
+    /* Keep the motion-wake callback registered regardless of who starts the
+     * pipeline, then apply the whole camera configuration atomically. */
+    (void)local_camera_register_motion_cb(api_camera_motion_wake_cb, NULL);
+    (void)local_camera_apply_settings(camera_enabled, camera_motion_wake, camera_motion_threshold,
+                                      camera_jpeg_quality, camera_hflip, camera_vflip,
+                                      camera_resolution);
 #endif
 
     cJSON *resp = cJSON_CreateObject();

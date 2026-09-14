@@ -130,6 +130,17 @@ void *hosted_realloc(void *mem, size_t newsize)
 
 void *hosted_malloc_align(size_t size, size_t align)
 {
+	/* Prefer PSRAM for the SDIO DMA buffers (mempool packet buffers + RX
+	 * streaming double-buffer). On ESP32-P4 the internal DMA-capable heap is
+	 * only a few hundred KB and gets exhausted ("STA TX buffer alloc failed")
+	 * when the built-in camera streams MJPEG, which bursts many TX packets.
+	 * PSRAM is DMA-capable on P4 (SOC_PSRAM_DMA_CAPABLE=1) and the sdmmc
+	 * driver cache-syncs these buffers, so serving them from PSRAM keeps
+	 * internal-DMA headroom without breaking the SDIO RX/TX path. */
+	void *p = heap_caps_aligned_alloc(align, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+	if (p) {
+		return p;
+	}
 	return heap_caps_aligned_alloc(align, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
 }
 

@@ -18,6 +18,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 #include <time.h>
 
 #include "sdkconfig.h"
@@ -44,7 +45,7 @@
 #define DISPLAY_NVS_NAMESPACE "display"
 #define DISPLAY_NVS_KEY_POWER "power"
 #define DISPLAY_NVS_MAGIC 0x44535057U /* "DSPW" */
-#define DISPLAY_NVS_VERSION 3U
+#define DISPLAY_NVS_VERSION 4U
 
 typedef struct {
     uint32_t magic;
@@ -59,6 +60,7 @@ typedef struct {
     uint32_t screensaver_enabled;
     int32_t screensaver_percent;
     uint32_t screensaver_clock_enabled;
+    char screensaver_wallpaper[64];
 } display_power_nvs_t;
 
 /* JC8012P4A1C panel wiring (see esp32_p4_function_ev_board.h in the
@@ -89,6 +91,7 @@ static int s_night_end_hour = APP_DISPLAY_NIGHT_END_HOUR;
 static bool s_screensaver_enabled = APP_DISPLAY_SCREENSAVER_ENABLED;
 static int s_screensaver_brightness = APP_DISPLAY_SCREENSAVER_BRIGHTNESS_PERCENT;
 static bool s_screensaver_clock_enabled = APP_DISPLAY_SCREENSAVER_CLOCK_ENABLED;
+static char s_screensaver_wallpaper[64] = "";
 static int64_t s_last_activity_us = 0;
 
 static void display_power_config_load(void);
@@ -177,6 +180,7 @@ void display_get_power_config(display_power_config_t *out)
     out->screensaver_enabled = s_screensaver_enabled;
     out->screensaver_brightness_percent = s_screensaver_brightness;
     out->screensaver_clock_enabled = s_screensaver_clock_enabled;
+    strlcpy(out->screensaver_wallpaper, s_screensaver_wallpaper, sizeof(out->screensaver_wallpaper));
 }
 
 void display_set_power_config(const display_power_config_t *cfg)
@@ -194,6 +198,7 @@ void display_set_power_config(const display_power_config_t *cfg)
     s_screensaver_enabled = cfg->screensaver_enabled;
     s_screensaver_brightness = display_clamp_brightness(cfg->screensaver_brightness_percent);
     s_screensaver_clock_enabled = cfg->screensaver_clock_enabled;
+    strlcpy(s_screensaver_wallpaper, cfg->screensaver_wallpaper, sizeof(s_screensaver_wallpaper));
     display_power_config_save();
     if (!s_display_ready) {
         return;
@@ -222,23 +227,32 @@ static void display_power_config_load(void)
         return; /* first boot or incompatible layout: keep compile-time defaults */
     }
 
-    /* v1 predates the screensaver fields; v2 predates the clock flag. Each
-     * older blob is an exact prefix of the current struct, so the common
-     * fields are already populated above. */
+    /* v1 predates the screensaver fields; v2 predates the clock flag; v3
+     * predates the wallpaper filename. Each older blob is an exact prefix of
+     * the current struct, so the common fields are already populated above. */
     const size_t v1_len = offsetof(display_power_nvs_t, screensaver_enabled);
     const size_t v2_len = offsetof(display_power_nvs_t, screensaver_clock_enabled);
+    const size_t v3_len = offsetof(display_power_nvs_t, screensaver_wallpaper);
     if (stored.version == DISPLAY_NVS_VERSION && len == sizeof(stored)) {
         s_screensaver_enabled = stored.screensaver_enabled != 0U;
         s_screensaver_brightness = display_clamp_brightness((int)stored.screensaver_percent);
         s_screensaver_clock_enabled = stored.screensaver_clock_enabled != 0U;
+        strlcpy(s_screensaver_wallpaper, stored.screensaver_wallpaper, sizeof(s_screensaver_wallpaper));
+    } else if (stored.version == 3U && len == v3_len) {
+        s_screensaver_enabled = stored.screensaver_enabled != 0U;
+        s_screensaver_brightness = display_clamp_brightness((int)stored.screensaver_percent);
+        s_screensaver_clock_enabled = stored.screensaver_clock_enabled != 0U;
+        s_screensaver_wallpaper[0] = '\0';
     } else if (stored.version == 2U && len == v2_len) {
         s_screensaver_enabled = stored.screensaver_enabled != 0U;
         s_screensaver_brightness = display_clamp_brightness((int)stored.screensaver_percent);
         s_screensaver_clock_enabled = APP_DISPLAY_SCREENSAVER_CLOCK_ENABLED;
+        s_screensaver_wallpaper[0] = '\0';
     } else if (stored.version == 1U && len == v1_len) {
         s_screensaver_enabled = APP_DISPLAY_SCREENSAVER_ENABLED;
         s_screensaver_brightness = APP_DISPLAY_SCREENSAVER_BRIGHTNESS_PERCENT;
         s_screensaver_clock_enabled = APP_DISPLAY_SCREENSAVER_CLOCK_ENABLED;
+        s_screensaver_wallpaper[0] = '\0';
     } else {
         return; /* unknown layout: keep compile-time defaults */
     }
@@ -273,6 +287,7 @@ static void display_power_config_save(void)
         .screensaver_percent = s_screensaver_brightness,
         .screensaver_clock_enabled = s_screensaver_clock_enabled ? 1U : 0U,
     };
+    strlcpy(stored.screensaver_wallpaper, s_screensaver_wallpaper, sizeof(stored.screensaver_wallpaper));
     if (nvs_set_blob(handle, DISPLAY_NVS_KEY_POWER, &stored, sizeof(stored)) == ESP_OK) {
         (void)nvs_commit(handle);
     }

@@ -21,6 +21,14 @@
  * couple of MiB is more than enough for even a full-screen 1024x600 PNG. */
 #define UI_IMAGE_MAX_FILE_BYTES (4U * 1024U * 1024U)
 
+/* Maximum decoded pixel budget. The image is downscaled to the panel anyway,
+ * so accepting sources bigger than ~1.4x the panel resolution only wastes
+ * PSRAM. During decode lodepng holds the raw scanlines AND an ARGB8888 copy
+ * at once (8 bytes/pixel) on top of the compressed file, so a 1920x1080+
+ * wallpaper would exhaust the ~15 MB of PSRAM and fail with lodepng error 83
+ * (alloc fail). 1.2 MP covers up to ~1366x768 / 1280x960. */
+#define UI_IMAGE_MAX_DECODED_PIXELS (1200000U)
+
 static bool ui_image_read_file(const char *path, uint8_t **out_buf, size_t *out_len)
 {
     if (path == NULL || out_buf == NULL || out_len == NULL) {
@@ -102,6 +110,42 @@ bool ui_image_load_png_file(const char *path, int target_w, int target_h, lv_ima
     uint8_t *file_buf = NULL;
     size_t file_len = 0;
     if (!ui_image_read_file(path, &file_buf, &file_len)) {
+        return false;
+    }
+
+    /* Read only the IHDR first: reject oversized sources before lodepng
+     * allocates the raw scanlines + ARGB8888 working copy. */
+    unsigned iw = 0;
+    unsigned ih = 0;
+    LodePNGState inspect_state;
+    lodepng_state_init(&inspect_state);
+    unsigned inspect_err = lodepng_inspect(&iw, &ih, &inspect_state, file_buf, file_len);
+    unsigned bpp = lodepng_get_bpp(&inspect_state.info_png.color);
+    lodepng_state_cleanup(&inspect_state);
+    if (inspect_err != 0 || iw == 0 || ih == 0) {
+        ESP_LOGW(TAG, "PNG header invalid (%u) for %s", inspect_err, path);
+        free(file_buf);
+        return false;
+    }
+    uint64_t pixels = (uint64_t)iw * (uint64_t)ih;
+    /* Decode peak has two phases (see lodepng.c decodeGeneric):
+     *   phase A (inflate): loader buffer + idat copy + raw scanlines
+     *   phase B (post-process): loader buffer + scanlines + ARGB8888 working copy
+     * idat is freed before the ARGB8888 buffer is allocated, so the peak is
+     * the larger of the two phases, not their sum. Compare against currently
+     * free PSRAM with a small fragmentation headroom so we reject the source
+     * BEFORE lodepng runs out of memory (its cryptic error 83). */
+    uint64_t bytes_per_px = ((uint64_t)bpp + 7U) / 8U; /* round up sub-byte gray depths */
+    uint64_t peak_a = 2ULL * (uint64_t)file_len + pixels * bytes_per_px;
+    uint64_t peak_b = (uint64_t)file_len + pixels * (bytes_per_px + 4ULL);
+    uint64_t peak = (peak_a > peak_b) ? peak_a : peak_b;
+    size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t headroom = 512U * 1024U;
+    size_t budget = (free_spiram > headroom) ? (free_spiram - headroom) : 0;
+    if (pixels > UI_IMAGE_MAX_DECODED_PIXELS || peak > (uint64_t)budget) {
+        ESP_LOGW(TAG, "PNG too large (%u x %u, %zu bytes) for %s; skipping (peak %llu > free %zu)",
+                 iw, ih, file_len, path, peak, free_spiram);
+        free(file_buf);
         return false;
     }
 

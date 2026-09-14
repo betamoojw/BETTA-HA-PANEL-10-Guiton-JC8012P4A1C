@@ -697,6 +697,151 @@
         </section>
 
         <section>
+          <h2 id="settingsLocalCamHeading">Zintegrowana kamera</h2>
+          <div class="form">
+            <div class="meta" id="settingsLocalCamHint">Wbudowana kamera OV02C10 (MIPI-CSI). Ustawienia są stosowane natychmiast, bez restartu panelu.</div>
+            <div id="settingsLocalCamStatus" class="meta"></div>
+            <label class="row">
+              <input id="settingsLocalCamEnabled" type="checkbox" />
+              <span id="settingsLocalCamEnabledLabel">Kamera włączona</span>
+            </label>
+            <label class="row">
+              <input id="settingsLocalCamStream" type="checkbox" />
+              <span id="settingsLocalCamStreamLabel">Transmisja na żywo do HA (MJPEG)</span>
+            </label>
+            <label class="row">
+              <input id="settingsLocalCamMotion" type="checkbox" />
+              <span id="settingsLocalCamMotionLabel">Wykrywanie ruchu (budzenie ekranu)</span>
+            </label>
+            <label><span id="settingsLocalCamThresholdLabel">Czułość detekcji ruchu (1..64, mniej = czulej)</span>
+              <input id="settingsLocalCamThreshold" type="number" min="1" max="64" step="1" />
+            </label>
+            <div class="cal">
+              <div class="cal-title" id="settingsLocalCamMotionHeading">Detekcja ruchu</div>
+              <div class="meta" id="settingsLocalCamMotionHint">Strefy i progi detekcji ruchu. Współrzędne w % kadru (x, y od lewego górnego rogu).</div>
+              <div class="cal-row">
+                <div class="cal-head"><span id="settingsLocalCamMotionMinAreaLabel">Min. obszar zmiany (%)</span><span class="cal-val" id="settingsLocalCamMotionMinAreaVal">0</span></div>
+                <input id="settingsLocalCamMotionMinArea" type="range" min="0" max="100" step="1" />
+              </div>
+              <label><span id="settingsLocalCamMotionMinDurationLabel">Min. czas trwania ruchu (ms, 0 = wył.)</span>
+                <input id="settingsLocalCamMotionMinDuration" type="number" min="0" max="1000" step="50" />
+              </label>
+              <label><span id="settingsLocalCamMotionCooldownLabel">Odstęp między wykryciami (ms)</span>
+                <input id="settingsLocalCamMotionCooldown" type="number" min="0" max="30000" step="100" />
+              </label>
+              <label><span id="settingsLocalCamMotionStartDelayLabel">Opóźnienie po starcie kamery (ms)</span>
+                <input id="settingsLocalCamMotionStartDelay" type="number" min="0" max="10000" step="100" />
+              </label>
+              <label class="row">
+                <input id="settingsLocalCamMotionIgnoreLighting" type="checkbox" />
+                <span id="settingsLocalCamMotionIgnoreLightingLabel">Ignoruj nagłą zmianę oświetlenia</span>
+              </label>
+              <div class="meta" id="settingsLocalCamZonesHint">Zaznacz strefę przeciągając po podglądzie (max 4). Bez stref = cały kadr.</div>
+              <div class="row">
+                <button id="settingsLocalCamZonesSnapshotBtn" class="btn small" type="button">Odśwież podgląd stref</button>
+                <button id="settingsLocalCamZonesClearBtn" class="btn small" type="button">Wyczyść strefy</button>
+              </div>
+              <div id="settingsLocalCamZonesWrap" class="camera-zones-wrap" hidden>
+                <img id="settingsLocalCamZonesSnapshot" class="camera-snapshot" alt="Podgląd stref" />
+                <div id="settingsLocalCamZonesOverlay" class="camera-zones-overlay"></div>
+              </div>
+              <div id="settingsLocalCamZonesList" class="camera-zones-list"></div>
+              <div class="meta" id="settingsLocalCamMotionDiag" hidden></div>
+              <div class="row">
+                <button id="settingsLocalCamMotionDiagBtn" class="btn small" type="button">Sprawdź detekcję</button>
+              </div>
+            </div>
+            <label><span id="settingsLocalCamQualityLabel">Jakość JPEG (10..95)</span>
+              <input id="settingsLocalCamQuality" type="number" min="10" max="95" step="1" />
+            </label>
+            <label><span id="settingsLocalCamResolutionLabel">Rozdzielczość</span>
+              <select id="settingsLocalCamResolution">
+                <option value="0" id="settingsLocalCamResolutionFullHdOption">Full HD (1920x1080)</option>
+                <option value="1" id="settingsLocalCamResolutionHdReadyOption">HD Ready (960x540)</option>
+              </select>
+            </label>
+            <label class="row">
+              <input id="settingsLocalCamHflip" type="checkbox" />
+              <span id="settingsLocalCamHflipLabel">Odbicie poziome (H)</span>
+            </label>
+            <label class="row">
+              <input id="settingsLocalCamVflip" type="checkbox" />
+              <span id="settingsLocalCamVflipLabel">Odbicie pionowe (V)</span>
+            </label>
+            <div class="cal">
+              <div class="cal-title" id="settingsLocalCamImgHeading">Kalibracja obrazu (ISP)</div>
+              <div class="meta" id="settingsLocalCamImgHint">Kalibracja manualna działa natychmiast, bez restartu panelu. 100% = wartość automatyczna.</div>
+              <label class="row">
+                <input id="settingsLocalCamImgManual" type="checkbox" />
+                <span id="settingsLocalCamImgManualLabel">Kalibracja manualna</span>
+              </label>
+              <label class="row">
+                <input id="settingsLocalCamImgAutoWb" type="checkbox" />
+                <span id="settingsLocalCamImgAutoWbLabel">Auto balans bieli</span>
+              </label>
+              <label class="row">
+                <input id="settingsLocalCamImgAutoSharpen" type="checkbox" />
+                <span id="settingsLocalCamImgAutoSharpenLabel">Auto ostrość</span>
+              </label>
+              <label class="row">
+                <input id="settingsLocalCamImgAutoDenoise" type="checkbox" />
+                <span id="settingsLocalCamImgAutoDenoiseLabel">Auto odszumianie</span>
+              </label>
+              <div class="cal-row" id="settingsLocalCamImgBrightnessRow">
+                <div class="cal-head"><span id="settingsLocalCamImgBrightnessLabel">Jasność</span><span class="cal-val" id="settingsLocalCamImgBrightnessVal">0</span></div>
+                <input id="settingsLocalCamImgBrightness" type="range" min="-128" max="127" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgContrastRow">
+                <div class="cal-head"><span id="settingsLocalCamImgContrastLabel">Kontrast (128 = neutralny)</span><span class="cal-val" id="settingsLocalCamImgContrastVal">128</span></div>
+                <input id="settingsLocalCamImgContrast" type="range" min="0" max="255" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgSaturationRow">
+                <div class="cal-head"><span id="settingsLocalCamImgSaturationLabel">Nasycenie (128 = neutralne)</span><span class="cal-val" id="settingsLocalCamImgSaturationVal">128</span></div>
+                <input id="settingsLocalCamImgSaturation" type="range" min="0" max="255" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgHueRow">
+                <div class="cal-head"><span id="settingsLocalCamImgHueLabel">Barwa (hue)</span><span class="cal-val" id="settingsLocalCamImgHueVal">0</span></div>
+                <input id="settingsLocalCamImgHue" type="range" min="0" max="360" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgToneShadowsRow">
+                <div class="cal-head"><span id="settingsLocalCamImgToneShadowsLabel">Ton - cienie</span><span class="cal-val" id="settingsLocalCamImgToneShadowsVal">0%</span></div>
+                <input id="settingsLocalCamImgToneShadows" type="range" min="-100" max="100" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgToneHighlightsRow">
+                <div class="cal-head"><span id="settingsLocalCamImgToneHighlightsLabel">Ton - światła</span><span class="cal-val" id="settingsLocalCamImgToneHighlightsVal">0%</span></div>
+                <input id="settingsLocalCamImgToneHighlights" type="range" min="-100" max="100" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgWbRedRow">
+                <div class="cal-head"><span id="settingsLocalCamImgWbRedLabel">Balans bieli - czerwony</span><span class="cal-val" id="settingsLocalCamImgWbRedVal">100%</span></div>
+                <input id="settingsLocalCamImgWbRed" type="range" min="50" max="200" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgWbBlueRow">
+                <div class="cal-head"><span id="settingsLocalCamImgWbBlueLabel">Balans bieli - niebieski</span><span class="cal-val" id="settingsLocalCamImgWbBlueVal">100%</span></div>
+                <input id="settingsLocalCamImgWbBlue" type="range" min="50" max="200" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgSharpenRow">
+                <div class="cal-head"><span id="settingsLocalCamImgSharpenLabel">Ostrość</span><span class="cal-val" id="settingsLocalCamImgSharpenVal">100%</span></div>
+                <input id="settingsLocalCamImgSharpen" type="range" min="25" max="300" step="1" />
+              </div>
+              <div class="cal-row" id="settingsLocalCamImgDenoiseRow">
+                <div class="cal-head"><span id="settingsLocalCamImgDenoiseLabel">Odszumianie</span><span class="cal-val" id="settingsLocalCamImgDenoiseVal">100%</span></div>
+                <input id="settingsLocalCamImgDenoise" type="range" min="25" max="200" step="1" />
+              </div>
+              <div class="row">
+                <button id="settingsLocalCamImgApplyBtn" class="btn small" type="button">Zastosuj kalibrację</button>
+                <button id="settingsLocalCamImgResetBtn" class="btn small" type="button">Reset (neutralne)</button>
+              </div>
+            </div>
+            <div class="row">
+              <button id="settingsLocalCamSaveBtn" class="btn primary" type="button">Zapisz</button>
+              <button id="settingsLocalCamSnapshotBtn" class="btn small" type="button">Odśwież podgląd</button>
+            </div>
+            <img id="settingsLocalCamSnapshot" class="camera-snapshot" alt="Podgląd kamery" hidden />
+            <div id="settingsLocalCamSnapshotHint" class="meta">Podgląd działa, gdy kamera jest włączona.</div>
+          </div>
+        </section>
+
+        <section>
           <h2 id="settingsTimeHeading">Time</h2>
           <div class="form">
             <label><span id="settingsNtpServerLabel">NTP Server</span>
@@ -747,9 +892,13 @@
               <span id="settingsScreensaverClockLabel">Show clock on screen saver</span>
             </label>
             <div class="row">
-              <input id="settingsScreensaverWallpaperFile" type="file" accept=".png,.jpg,.jpeg" />
+              <input id="settingsScreensaverWallpaperName" type="text" maxlength="48" placeholder="screensaver.png" />
+              <input id="settingsScreensaverWallpaperFile" type="file" accept=".png" />
               <button id="settingsScreensaverWallpaperUploadBtn" class="btn small" type="button">Upload wallpaper</button>
             </div>
+            <label><span id="settingsScreensaverWallpaperSelectLabel">Wallpaper (from SD card)</span>
+              <select id="settingsScreensaverWallpaperSelect"></select>
+            </label>
             <div id="settingsScreensaverWallpaperInfo" class="meta"></div>
             <label><span id="settingsScreensaverBrightnessLabel">Screensaver brightness (%)</span>
               <input id="settingsScreensaverBrightness" type="number" min="0" max="100" step="5" />

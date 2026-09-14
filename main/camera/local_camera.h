@@ -24,6 +24,40 @@ extern "C" {
 
 typedef void (*local_camera_motion_cb_t)(void *user_data);
 
+/* Motion detector tuning (point 1 of the motion-detection upgrade). */
+#define LOCAL_CAMERA_MOTION_MAX_ZONES 4
+
+typedef struct {
+    uint8_t x; /* left edge, percent of frame width 0..100 */
+    uint8_t y; /* top edge, percent of frame height 0..100 */
+    uint8_t w; /* width, percent of frame width 0..100 */
+    uint8_t h; /* height, percent of frame height 0..100 */
+} local_camera_motion_zone_t;
+
+typedef struct {
+    uint8_t threshold;       /* 1..64, mean-abs-diff sensitivity */
+    uint8_t min_area_pct;    /* 0..100 % of active cells that must change, 0 = off */
+    uint16_t min_duration_ms; /* 0..1000 ms the change must persist, 0 = off */
+    uint16_t cooldown_ms;    /* 0..30000 ms between two callbacks */
+    uint16_t start_delay_ms; /* 0..10000 ms grace period after STREAMON */
+    bool ignore_lighting;    /* suppress global brightness shifts */
+    uint8_t zone_count;      /* 0..4; 0 = whole frame (legacy) */
+    local_camera_motion_zone_t zones[LOCAL_CAMERA_MOTION_MAX_ZONES];
+} local_camera_motion_config_t;
+
+typedef struct {
+    uint8_t threshold;
+    uint8_t last_level;        /* last mean-abs-diff (0..255) */
+    uint8_t last_changed_pct;  /* last changed-cell percentage (0..100) */
+    bool last_ignored_lighting; /* last frame was rejected as a lighting change */
+    bool active;               /* currently above threshold (debouncing) */
+    uint32_t trigger_count;    /* motion callbacks fired since boot */
+    int64_t last_trigger_ms;   /* esp_timer ms of the last callback */
+    uint8_t zone_count;        /* 0 = whole-frame virtual zone */
+    uint8_t zone_level[LOCAL_CAMERA_MOTION_MAX_ZONES];       /* per-zone mean diff */
+    uint8_t zone_changed_pct[LOCAL_CAMERA_MOTION_MAX_ZONES]; /* per-zone changed % */
+} local_camera_motion_status_t;
+
 /* Start the camera pipeline.  Reuses the touch/codec I2C bus (I2C_NUM_1,
  * SCL=8/SDA=7) for the sensor SCCB interface.  Safe to call repeatedly. */
 esp_err_t local_camera_start(void);
@@ -44,11 +78,41 @@ void local_camera_set_motion_wake(bool enabled);
  * 32x32 luma grid.  Higher values = less sensitive.  Range 1..64. */
 void local_camera_set_motion_threshold(uint8_t threshold);
 
+/* Apply the full motion-detector configuration (zones, debounce, cooldown,
+ * start-delay grace period and the global-lighting filter) atomically.  Safe
+ * to call before the pipeline is started: the values persist in the component
+ * state and take effect as soon as frames flow. */
+void local_camera_set_motion_config(const local_camera_motion_config_t *config);
+void local_camera_get_motion_config(local_camera_motion_config_t *config);
+
+/* Read live motion-detector diagnostics (per-zone levels, counters, state). */
+void local_camera_get_motion_status(local_camera_motion_status_t *status);
+
 /* Runtime JPEG quality used by local_camera_snapshot_jpeg().  Range 10..95. */
 void local_camera_set_jpeg_quality(uint8_t quality);
 
 /* Runtime mirroring.  Applied immediately if the pipeline is running. */
 void local_camera_set_flip(bool hflip, bool vflip);
+
+/* Resolution mode: 0 = Full HD (1920x1080), 1 = HD Ready (960x540).
+ * Changing the mode while the pipeline is running requires a restart so the
+ * capture-side frame cache and JPEG buffers are reallocated for the new size;
+ * local_camera_apply_settings() handles that automatically. */
+void local_camera_set_resolution(int resolution);
+int local_camera_get_resolution(void);
+
+/* Apply every camera parameter in one call (used by the web settings API and
+ * the on-panel settings page).  Starts/stops the pipeline when "enabled"
+ * changes, restarts it when "resolution" changes while running, and applies
+ * the remaining parameters in place.  Returns ESP_OK on success. */
+esp_err_t local_camera_apply_settings(bool enabled, bool motion_wake, uint8_t motion_threshold,
+                                      uint8_t jpeg_quality, bool hflip, bool vflip,
+                                      int resolution);
+
+/* Copy the latest captured frame, scaled to dst_w x dst_h (nearest neighbour),
+ * into the caller-provided RGB565 buffer.  dst must hold dst_w*dst_h*2 bytes.
+ * Returns ESP_ERR_INVALID_STATE when the camera is off or no frame is ready. */
+esp_err_t local_camera_copy_scaled_rgb565(uint8_t *dst, int dst_w, int dst_h);
 
 /* Encode the latest captured frame to JPEG and return a freshly allocated
  * buffer.  The caller owns *out_buf and must free() it. */

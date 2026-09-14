@@ -70,14 +70,38 @@ static bool s_small = false;
 /* Slider bookkeeping. Only one content build is alive at a time, so a */
 /* small static pool is enough; entries are re-used on every rebuild.  */
 /* ------------------------------------------------------------------ */
-typedef enum { SET_SL_ACTIVE, SET_SL_DIM, SET_SL_SCREENSAVER, SET_SL_VOLUME } ui_slider_kind_t;
+typedef enum {
+    SET_SL_ACTIVE,
+    SET_SL_DIM,
+    SET_SL_SCREENSAVER,
+    SET_SL_VOLUME,
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    SET_SL_MOTION_SENS,
+    SET_SL_JPEG_QUALITY,
+    /* Manual image calibration (all of them need the master switch). */
+    SET_SL_IMG_BRIGHTNESS,
+    SET_SL_IMG_CONTRAST,
+    SET_SL_IMG_SATURATION,
+    SET_SL_IMG_HUE,
+    SET_SL_IMG_TONE_SHADOWS,
+    SET_SL_IMG_TONE_HIGHLIGHTS,
+    SET_SL_IMG_WB_RED,
+    SET_SL_IMG_WB_BLUE,
+    SET_SL_IMG_SHARPEN,
+    SET_SL_IMG_DENOISE,
+#endif
+} ui_slider_kind_t;
+
 typedef struct {
     ui_slider_kind_t kind;
     lv_obj_t *slider;
     lv_obj_t *value_label;
+    int min;
+    int max;
+    bool percent;
 } ui_slider_ctx_t;
 
-static ui_slider_ctx_t s_sliders[4];
+static ui_slider_ctx_t s_sliders[16];
 static uint8_t s_slider_count = 0;
 static ui_slider_ctx_t *s_active_slider = NULL;
 
@@ -87,6 +111,14 @@ static runtime_settings_t s_ui_runtime;
 static bool s_ui_runtime_loaded = false;
 
 static void st_rebuild_content(void);
+
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+static void st_camera_set_motion_threshold_ui(int value);
+static void st_camera_set_jpeg_quality_ui(int value);
+static void st_camera_set_image_value_ui(ui_slider_kind_t kind, int value);
+static void st_camera_image_sync_sliders(void);
+static void st_camera_preview_stop(void);
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Geometry / fonts                                                    */
@@ -228,8 +260,12 @@ static void st_slider_value_changed_cb(lv_event_t *event)
     if (ctx == NULL || ctx->value_label == NULL) {
         return;
     }
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", (int)lv_slider_get_value(ctx->slider));
+    char buf[12];
+    if (ctx->percent) {
+        snprintf(buf, sizeof(buf), "%d%%", (int)lv_slider_get_value(ctx->slider));
+    } else {
+        snprintf(buf, sizeof(buf), "%d", (int)lv_slider_get_value(ctx->slider));
+    }
     lv_label_set_text(ctx->value_label, buf);
 }
 
@@ -245,6 +281,26 @@ static void st_slider_release_cb(lv_event_t *event)
 #if CONFIG_APP_FEATURE_XIAOZHI
     case SET_SL_VOLUME:
         (void)xz_audio_set_volume(value);
+        break;
+#endif
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    case SET_SL_MOTION_SENS:
+        st_camera_set_motion_threshold_ui(value);
+        break;
+    case SET_SL_JPEG_QUALITY:
+        st_camera_set_jpeg_quality_ui(value);
+        break;
+    case SET_SL_IMG_BRIGHTNESS:
+    case SET_SL_IMG_CONTRAST:
+    case SET_SL_IMG_SATURATION:
+    case SET_SL_IMG_HUE:
+    case SET_SL_IMG_TONE_SHADOWS:
+    case SET_SL_IMG_TONE_HIGHLIGHTS:
+    case SET_SL_IMG_WB_RED:
+    case SET_SL_IMG_WB_BLUE:
+    case SET_SL_IMG_SHARPEN:
+    case SET_SL_IMG_DENOISE:
+        st_camera_set_image_value_ui(ctx->kind, value);
         break;
 #endif
     case SET_SL_ACTIVE:
@@ -266,7 +322,8 @@ static void st_slider_release_cb(lv_event_t *event)
     }
 }
 
-static void st_add_slider_block(lv_obj_t *card, const char *caption, int value, ui_slider_kind_t kind)
+static void st_add_slider_block_ex(lv_obj_t *card, const char *caption, int value,
+                                   int min, int max, ui_slider_kind_t kind, bool percent)
 {
     lv_obj_t *row = lv_obj_create(card);
     lv_obj_remove_style_all(row);
@@ -292,17 +349,26 @@ static void st_add_slider_block(lv_obj_t *card, const char *caption, int value, 
     }
     ui_slider_ctx_t *ctx = &s_sliders[s_slider_count++];
     ctx->kind = kind;
+    ctx->min = min;
+    ctx->max = max;
+    ctx->percent = percent;
 
     lv_obj_t *slider = lv_slider_create(card);
     lv_obj_set_width(slider, LV_PCT(100));
     lv_obj_set_height(slider, 28);
-    int slider_max = 100;
+    int slider_max = max;
 #if CONFIG_APP_FEATURE_XIAOZHI
     if (kind == SET_SL_VOLUME) {
         slider_max = xz_audio_get_max_volume();
     }
 #endif
-    lv_slider_set_range(slider, 0, slider_max);
+    lv_slider_set_range(slider, min, slider_max);
+    if (value < min) {
+        value = min;
+    }
+    if (value > slider_max) {
+        value = slider_max;
+    }
     lv_slider_set_value(slider, value, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider, lv_color_hex(APP_UI_COLOR_LIGHT_TRACK_OFF), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_MAIN);
@@ -317,8 +383,12 @@ static void st_add_slider_block(lv_obj_t *card, const char *caption, int value, 
     ctx->slider = slider;
     ctx->value_label = value_label;
 
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", value);
+    char buf[12];
+    if (percent) {
+        snprintf(buf, sizeof(buf), "%d%%", value);
+    } else {
+        snprintf(buf, sizeof(buf), "%d", value);
+    }
     lv_label_set_text(value_label, buf);
 
     lv_obj_add_event_cb(slider, st_slider_value_changed_cb, LV_EVENT_VALUE_CHANGED, ctx);
@@ -327,6 +397,11 @@ static void st_add_slider_block(lv_obj_t *card, const char *caption, int value, 
     if (kind == SET_SL_ACTIVE) {
         s_active_slider = ctx;
     }
+}
+
+static void st_add_slider_block(lv_obj_t *card, const char *caption, int value, ui_slider_kind_t kind)
+{
+    st_add_slider_block_ex(card, caption, value, 0, 100, kind, true);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1020,16 +1095,6 @@ static void st_camera_persist(void)
     (void)runtime_settings_save(&s_cam_cfg);
 }
 
-static void st_camera_apply_runtime(void)
-{
-    /* Re-apply the static camera parameters (motion/flip/quality) so a
-     * freshly started pipeline keeps the user's choices. */
-    local_camera_set_motion_wake(s_cam_cfg.camera_motion_wake);
-    local_camera_set_motion_threshold((uint8_t)s_cam_cfg.camera_motion_threshold);
-    local_camera_set_jpeg_quality((uint8_t)s_cam_cfg.camera_jpeg_quality);
-    local_camera_set_flip(s_cam_cfg.camera_hflip, s_cam_cfg.camera_vflip);
-}
-
 static void st_camera_motion_wake_cb(void *user_data)
 {
     (void)user_data;
@@ -1053,13 +1118,17 @@ static void st_camera_enabled_switch_cb(lv_event_t *event)
     st_camera_ensure_loaded();
     s_cam_cfg.camera_enabled = on;
     if (on) {
-        if (local_camera_start() == ESP_OK) {
-            local_camera_register_motion_cb(st_camera_motion_wake_cb, NULL);
-            st_camera_apply_runtime();
-        }
-    } else {
-        local_camera_stop();
+        /* Register before apply_settings so a fresh pipeline re-arms the
+         * motion callback with the persisted values (resolution included). */
+        local_camera_register_motion_cb(st_camera_motion_wake_cb, NULL);
     }
+    (void)local_camera_apply_settings(on,
+                                      s_cam_cfg.camera_motion_wake,
+                                      (uint8_t)s_cam_cfg.camera_motion_threshold,
+                                      (uint8_t)s_cam_cfg.camera_jpeg_quality,
+                                      s_cam_cfg.camera_hflip,
+                                      s_cam_cfg.camera_vflip,
+                                      s_cam_cfg.camera_resolution);
     st_camera_persist();
 }
 
@@ -1093,8 +1162,240 @@ static void st_camera_vflip_switch_cb(lv_event_t *event)
     st_camera_persist();
 }
 
+static void st_camera_set_motion_threshold_ui(int value)
+{
+    if (value < 1) {
+        value = 1;
+    }
+    if (value > 64) {
+        value = 64;
+    }
+    st_camera_ensure_loaded();
+    s_cam_cfg.camera_motion_threshold = value;
+    local_camera_set_motion_threshold((uint8_t)value);
+    st_camera_persist();
+}
+
+static void st_camera_set_jpeg_quality_ui(int value)
+{
+    if (value < 10) {
+        value = 10;
+    }
+    if (value > 95) {
+        value = 95;
+    }
+    st_camera_ensure_loaded();
+    s_cam_cfg.camera_jpeg_quality = value;
+    local_camera_set_jpeg_quality((uint8_t)value);
+    st_camera_persist();
+}
+
+static void st_camera_set_image_value_ui(ui_slider_kind_t kind, int value)
+{
+    st_camera_ensure_loaded();
+
+    switch (kind) {
+    case SET_SL_IMG_BRIGHTNESS:
+        s_cam_cfg.camera_img_brightness = value;
+        break;
+    case SET_SL_IMG_CONTRAST:
+        s_cam_cfg.camera_img_contrast = value;
+        break;
+    case SET_SL_IMG_SATURATION:
+        s_cam_cfg.camera_img_saturation = value;
+        break;
+    case SET_SL_IMG_HUE:
+        s_cam_cfg.camera_img_hue = value;
+        break;
+    case SET_SL_IMG_TONE_SHADOWS:
+        s_cam_cfg.camera_img_tone_shadows = value;
+        break;
+    case SET_SL_IMG_TONE_HIGHLIGHTS:
+        s_cam_cfg.camera_img_tone_highlights = value;
+        break;
+    case SET_SL_IMG_WB_RED:
+        s_cam_cfg.camera_img_wb_red = value;
+        break;
+    case SET_SL_IMG_WB_BLUE:
+        s_cam_cfg.camera_img_wb_blue = value;
+        break;
+    case SET_SL_IMG_SHARPEN:
+        s_cam_cfg.camera_img_sharpen = value;
+        break;
+    case SET_SL_IMG_DENOISE:
+        s_cam_cfg.camera_img_denoise = value;
+        break;
+    default:
+        return;
+    }
+
+    (void)runtime_settings_apply_image_calibration(&s_cam_cfg);
+    st_camera_persist();
+}
+
+/* A calibration slider only has an effect while its master / "auto" switch is
+ * off, so the inactive ones are greyed out instead of being hidden. */
+static void st_camera_image_sync_sliders(void)
+{
+    for (uint8_t i = 0; i < s_slider_count; i++) {
+        ui_slider_ctx_t *ctx = &s_sliders[i];
+        if (ctx->slider == NULL) {
+            continue;
+        }
+
+        bool enabled;
+        switch (ctx->kind) {
+        case SET_SL_IMG_BRIGHTNESS:
+        case SET_SL_IMG_CONTRAST:
+        case SET_SL_IMG_SATURATION:
+        case SET_SL_IMG_HUE:
+        case SET_SL_IMG_TONE_SHADOWS:
+        case SET_SL_IMG_TONE_HIGHLIGHTS:
+            enabled = s_cam_cfg.camera_img_manual;
+            break;
+        case SET_SL_IMG_WB_RED:
+        case SET_SL_IMG_WB_BLUE:
+            enabled = s_cam_cfg.camera_img_manual && s_cam_cfg.camera_img_wb_manual;
+            break;
+        case SET_SL_IMG_SHARPEN:
+            enabled = s_cam_cfg.camera_img_manual && s_cam_cfg.camera_img_sharpen_manual;
+            break;
+        case SET_SL_IMG_DENOISE:
+            enabled = s_cam_cfg.camera_img_manual && s_cam_cfg.camera_img_denoise_manual;
+            break;
+        default:
+            continue;
+        }
+
+        if (enabled) {
+            lv_obj_remove_state(ctx->slider, LV_STATE_DISABLED);
+        } else {
+            lv_obj_add_state(ctx->slider, LV_STATE_DISABLED);
+        }
+    }
+}
+
+static void st_camera_image_switch_cb(lv_event_t *event)
+{
+    lv_obj_t *sw = lv_event_get_target(event);
+    const bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    st_camera_ensure_loaded();
+
+    switch ((ui_slider_kind_t)(uintptr_t)lv_event_get_user_data(event)) {
+    case SET_SL_IMG_BRIGHTNESS: /* master switch */
+        s_cam_cfg.camera_img_manual = on;
+        break;
+    case SET_SL_IMG_WB_RED: /* auto white balance */
+        s_cam_cfg.camera_img_wb_manual = !on;
+        break;
+    case SET_SL_IMG_SHARPEN: /* auto sharpness */
+        s_cam_cfg.camera_img_sharpen_manual = !on;
+        break;
+    case SET_SL_IMG_DENOISE: /* auto denoise */
+        s_cam_cfg.camera_img_denoise_manual = !on;
+        break;
+    default:
+        return;
+    }
+
+    (void)runtime_settings_apply_image_calibration(&s_cam_cfg);
+    st_camera_persist();
+    st_camera_image_sync_sliders();
+}
+
+static lv_obj_t *s_cam_res_label = NULL;
+
+static void st_camera_resolution_switch_cb(lv_event_t *event)
+{
+    lv_obj_t *sw = lv_event_get_target(event);
+    const bool hd_ready = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    st_camera_ensure_loaded();
+    s_cam_cfg.camera_resolution = hd_ready ? 1 : 0;
+    (void)local_camera_apply_settings(s_cam_cfg.camera_enabled,
+                                      s_cam_cfg.camera_motion_wake,
+                                      (uint8_t)s_cam_cfg.camera_motion_threshold,
+                                      (uint8_t)s_cam_cfg.camera_jpeg_quality,
+                                      s_cam_cfg.camera_hflip,
+                                      s_cam_cfg.camera_vflip,
+                                      s_cam_cfg.camera_resolution);
+    st_camera_persist();
+
+    if (s_cam_res_label != NULL) {
+        char info[48];
+        snprintf(info, sizeof(info), "%d x %d", local_camera_width(), local_camera_height());
+        lv_label_set_text(s_cam_res_label, info);
+    }
+}
+
+/* Live RGB565 preview (nearest-neighbour scaled into a small PSRAM buffer). */
+#define ST_CAM_PREVIEW_W 384
+#define ST_CAM_PREVIEW_H 216
+
+static lv_obj_t *s_cam_preview_img = NULL;
+static uint8_t *s_cam_preview_buf = NULL;
+static lv_timer_t *s_cam_preview_timer = NULL;
+static lv_image_dsc_t s_cam_preview_dsc;
+
+static void st_camera_preview_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    if (s_cam_preview_buf == NULL || s_cam_preview_img == NULL) {
+        return;
+    }
+    if (local_camera_copy_scaled_rgb565(s_cam_preview_buf, ST_CAM_PREVIEW_W, ST_CAM_PREVIEW_H) != ESP_OK) {
+        return; /* camera off or no frame yet */
+    }
+    lv_obj_invalidate(s_cam_preview_img);
+}
+
+static void st_camera_preview_stop(void)
+{
+    if (s_cam_preview_timer != NULL) {
+        lv_timer_del(s_cam_preview_timer);
+        s_cam_preview_timer = NULL;
+    }
+    if (s_cam_preview_buf != NULL) {
+        heap_caps_free(s_cam_preview_buf);
+        s_cam_preview_buf = NULL;
+    }
+    s_cam_preview_img = NULL;
+    memset(&s_cam_preview_dsc, 0, sizeof(s_cam_preview_dsc));
+}
+
+static void st_camera_preview_start(lv_obj_t *parent)
+{
+    st_camera_preview_stop();
+
+    const size_t buf_size = (size_t)ST_CAM_PREVIEW_W * ST_CAM_PREVIEW_H * 2;
+    s_cam_preview_buf = (uint8_t *)heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    if (s_cam_preview_buf == NULL) {
+        ESP_LOGW("UI_SET", "camera preview: PSRAM alloc failed (%u bytes)", (unsigned)buf_size);
+        return;
+    }
+    memset(s_cam_preview_buf, 0, buf_size);
+
+    s_cam_preview_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_cam_preview_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    s_cam_preview_dsc.header.flags = 0;
+    s_cam_preview_dsc.header.w = ST_CAM_PREVIEW_W;
+    s_cam_preview_dsc.header.h = ST_CAM_PREVIEW_H;
+    s_cam_preview_dsc.header.stride = ST_CAM_PREVIEW_W * 2;
+    s_cam_preview_dsc.data_size = buf_size;
+    s_cam_preview_dsc.data = s_cam_preview_buf;
+
+    s_cam_preview_img = lv_image_create(parent);
+    lv_obj_set_width(s_cam_preview_img, ST_CAM_PREVIEW_W);
+    lv_obj_set_height(s_cam_preview_img, ST_CAM_PREVIEW_H);
+    lv_image_set_src(s_cam_preview_img, &s_cam_preview_dsc);
+    lv_image_set_inner_align(s_cam_preview_img, LV_IMAGE_ALIGN_STRETCH);
+    lv_obj_set_style_bg_color(s_cam_preview_img, lv_color_hex(APP_UI_COLOR_CARD_BG_OFF), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_cam_preview_img, LV_OPA_COVER, LV_PART_MAIN);
+
+    s_cam_preview_timer = lv_timer_create(st_camera_preview_timer_cb, 500, NULL);
+}
+
 static lv_obj_t *st_add_camera_switch_row(lv_obj_t *card, const char *caption, bool initial,
-                                          lv_event_cb_t cb)
+                                          lv_event_cb_t cb, void *user_data)
 {
     lv_obj_t *row = lv_obj_create(card);
     lv_obj_remove_style_all(row);
@@ -1117,13 +1418,14 @@ static lv_obj_t *st_add_camera_switch_row(lv_obj_t *card, const char *caption, b
     } else {
         lv_obj_remove_state(sw, LV_STATE_CHECKED);
     }
-    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, user_data);
     return sw;
 }
 
 static void st_build_camera(lv_obj_t *parent)
 {
     st_camera_ensure_loaded();
+    s_cam_res_label = NULL;
 
     lv_obj_t *card = st_make_card(parent);
     st_card_title(card, "Kamera");
@@ -1131,28 +1433,82 @@ static void st_build_camera(lv_obj_t *parent)
     const bool running = local_camera_is_running();
     const bool stream_on = api_camera_local_get_stream_enabled();
 
-    st_add_camera_switch_row(card, "Kamera wlaczona", running, st_camera_enabled_switch_cb);
-    st_add_camera_switch_row(card, "Transmisja na zywo (HA)", stream_on, st_camera_stream_switch_cb);
+    st_add_camera_switch_row(card, "Kamera wlaczona", running, st_camera_enabled_switch_cb, NULL);
+    st_add_camera_switch_row(card, "Transmisja na zywo (HA)", stream_on, st_camera_stream_switch_cb, NULL);
     st_add_camera_switch_row(card, "Wykrywanie ruchu", s_cam_cfg.camera_motion_wake,
-                             st_camera_motion_switch_cb);
+                             st_camera_motion_switch_cb, NULL);
     st_add_camera_switch_row(card, "Odbicie poziome (H)", s_cam_cfg.camera_hflip,
-                             st_camera_hflip_switch_cb);
+                             st_camera_hflip_switch_cb, NULL);
     st_add_camera_switch_row(card, "Odbicie pionowe (V)", s_cam_cfg.camera_vflip,
-                             st_camera_vflip_switch_cb);
+                             st_camera_vflip_switch_cb, NULL);
+    st_add_camera_switch_row(card, "HD Ready (960x540)", s_cam_cfg.camera_resolution == 1,
+                             st_camera_resolution_switch_cb, NULL);
 
-    char info[128];
-    snprintf(info, sizeof(info), "Rozdzielczosc: %d x %d", local_camera_width(), local_camera_height());
-    st_info_row(card, "Rozdzielczosc", info);
+    st_add_slider_block_ex(card, "Czulosc detekcji ruchu", s_cam_cfg.camera_motion_threshold,
+                           1, 64, SET_SL_MOTION_SENS, false);
+    st_add_slider_block_ex(card, "Jakosc JPEG", s_cam_cfg.camera_jpeg_quality,
+                           10, 95, SET_SL_JPEG_QUALITY, false);
+
+    char info[48];
+    snprintf(info, sizeof(info), "%d x %d", local_camera_width(), local_camera_height());
+    s_cam_res_label = st_info_row(card, "Rozdzielczosc", info);
 
     lv_obj_t *card2 = st_make_card(parent);
-    st_card_title(card2, "Transmisja do Home Assistant");
-    lv_obj_t *note = lv_label_create(card2);
+    st_card_title(card2, "Podglad na zywo");
+    st_camera_preview_start(card2);
+
+    lv_obj_t *card3 = st_make_card(parent);
+    st_card_title(card3, "Transmisja do Home Assistant");
+    lv_obj_t *note = lv_label_create(card3);
     st_label(note,
         "Wlacz transmisje, a nastepnie dodaj w HA kamere MJPEG z adresem: "
         "http://IP_PANELU/api/camera/stream",
         st_f_row(), lv_color_hex(APP_UI_COLOR_TEXT_PRIMARY));
     lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(note, LV_PCT(100));
+
+    lv_obj_t *card4 = st_make_card(parent);
+    st_card_title(card4, "Kalibracja obrazu");
+
+    st_add_camera_switch_row(card4, "Kalibracja manualna", s_cam_cfg.camera_img_manual,
+                             st_camera_image_switch_cb, (void *)(uintptr_t)SET_SL_IMG_BRIGHTNESS);
+    st_add_camera_switch_row(card4, "Auto balans bieli", !s_cam_cfg.camera_img_wb_manual,
+                             st_camera_image_switch_cb, (void *)(uintptr_t)SET_SL_IMG_WB_RED);
+    st_add_camera_switch_row(card4, "Auto ostrosc", !s_cam_cfg.camera_img_sharpen_manual,
+                             st_camera_image_switch_cb, (void *)(uintptr_t)SET_SL_IMG_SHARPEN);
+    st_add_camera_switch_row(card4, "Auto odszumianie", !s_cam_cfg.camera_img_denoise_manual,
+                             st_camera_image_switch_cb, (void *)(uintptr_t)SET_SL_IMG_DENOISE);
+
+    st_add_slider_block_ex(card4, "Jasnosc", s_cam_cfg.camera_img_brightness,
+                           -128, 127, SET_SL_IMG_BRIGHTNESS, false);
+    st_add_slider_block_ex(card4, "Kontrast (128 = neutralny)", s_cam_cfg.camera_img_contrast,
+                           0, 255, SET_SL_IMG_CONTRAST, false);
+    st_add_slider_block_ex(card4, "Nasycenie (128 = neutralne)", s_cam_cfg.camera_img_saturation,
+                           0, 255, SET_SL_IMG_SATURATION, false);
+    st_add_slider_block_ex(card4, "Barwa (hue)", s_cam_cfg.camera_img_hue,
+                           0, 360, SET_SL_IMG_HUE, false);
+    st_add_slider_block_ex(card4, "Ton - cienie", s_cam_cfg.camera_img_tone_shadows,
+                           -100, 100, SET_SL_IMG_TONE_SHADOWS, true);
+    st_add_slider_block_ex(card4, "Ton - swiatla", s_cam_cfg.camera_img_tone_highlights,
+                           -100, 100, SET_SL_IMG_TONE_HIGHLIGHTS, true);
+    st_add_slider_block_ex(card4, "Balans bieli - czerwony", s_cam_cfg.camera_img_wb_red,
+                           50, 200, SET_SL_IMG_WB_RED, true);
+    st_add_slider_block_ex(card4, "Balans bieli - niebieski", s_cam_cfg.camera_img_wb_blue,
+                           50, 200, SET_SL_IMG_WB_BLUE, true);
+    st_add_slider_block_ex(card4, "Ostrosc", s_cam_cfg.camera_img_sharpen,
+                           25, 300, SET_SL_IMG_SHARPEN, true);
+    st_add_slider_block_ex(card4, "Odszumianie", s_cam_cfg.camera_img_denoise,
+                           25, 200, SET_SL_IMG_DENOISE, true);
+
+    lv_obj_t *cal_note = lv_label_create(card4);
+    st_label(cal_note,
+        "Suwaki dzialaja przy wlaczonej kalibracji manualnej; grupy z wlaczonym "
+        "trybem auto sa wygaszone (100% = wartosc automatyczna).",
+        st_f_note(), lv_color_hex(APP_UI_COLOR_TEXT_MUTED));
+    lv_label_set_long_mode(cal_note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(cal_note, LV_PCT(100));
+
+    st_camera_image_sync_sliders();
 }
 #endif
 
@@ -1200,6 +1556,10 @@ static void st_rebuild_content(void)
     s_slider_count = 0;
     s_active_slider = NULL;
 
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    st_camera_preview_stop();
+#endif
+
     lv_obj_clean(s_content);
     lv_obj_scroll_to_y(s_content, 0, LV_ANIM_OFF);
 
@@ -1233,6 +1593,9 @@ static void st_rebuild_content(void)
 static void st_close_cb(lv_event_t *event)
 {
     LV_UNUSED(event);
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    st_camera_preview_stop();
+#endif
     if (s_overlay != NULL) {
         lv_obj_del(s_overlay);
         s_overlay = NULL;
@@ -1382,6 +1745,9 @@ static void st_gear_cb(void)
 static void st_screen_built_cb(void)
 {
     /* ui_pages_init() cleaned the active screen: any overlay we owned is gone. */
+#if CONFIG_APP_FEATURE_LOCAL_CAMERA
+    st_camera_preview_stop();
+#endif
     s_overlay = NULL;
     s_rail = NULL;
     s_content = NULL;

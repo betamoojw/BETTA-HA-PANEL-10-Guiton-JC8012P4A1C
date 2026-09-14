@@ -180,6 +180,32 @@ static void line_finalize(void)
     s_line[0] = '\0';
 }
 
+/* Returns true when a log line at the given level/tag should be persisted:
+ * errors and warnings always, plus INFO from camera-related tags so the
+ * sensor/CSI bring-up sequence can be diagnosed remotely without a serial
+ * console. */
+static bool log_line_wanted(char level, const char *tag)
+{
+    if (level == 'E' || level == 'W') {
+        return true;
+    }
+    if (level != 'I') {
+        return false;
+    }
+
+    static const char *const cam_tags[] = {
+        "camera", "cam_sensor", "ov02c10", "xclk",
+        "esp_video", "esp_video_init", "esp_video_cam", "esp_video_buffer",
+        "csi_video", "isp_video", "jpeg_video", "ISP",
+    };
+    for (size_t i = 0; i < sizeof(cam_tags) / sizeof(cam_tags[0]); i++) {
+        if (strcmp(tag, cam_tags[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void prefix_parse(const char *fmt, va_list args)
 {
     if (s_line_open) {
@@ -201,12 +227,6 @@ static void prefix_parse(const char *fmt, va_list args)
         }
     }
 
-    if (*p != 'E' && *p != 'W') {
-        /* Only capture errors and warnings; keep the log compact. */
-        s_line_open = false;
-        return;
-    }
-
     const char *tag_start = strstr(p, ") ");
     if (tag_start == NULL) {
         s_line_open = false;
@@ -218,10 +238,15 @@ static void prefix_parse(const char *fmt, va_list args)
     if (tag_len >= sizeof(s_line_tag)) {
         tag_len = sizeof(s_line_tag) - 1U;
     }
-
-    s_line_level = *p;
     memcpy(s_line_tag, tag_start, tag_len);
     s_line_tag[tag_len] = '\0';
+
+    if (!log_line_wanted(*p, s_line_tag)) {
+        s_line_open = false;
+        return;
+    }
+
+    s_line_level = *p;
     s_line[0] = '\0';
     s_line_len = 0;
     s_line_open = true;
@@ -295,11 +320,11 @@ static void line_append(const char *fmt, va_list args)
  *   LOG_COLOR_x "x (%" PRIu32 ") %s: " user_format LOG_RESET_COLOR "\n"
  *
  * With colors disabled (this project) the format string starts directly with
- * the level letter; with colors enabled it starts with an ANSI escape. The
- * level is detected from the format string itself so I/D/V lines are rejected
- * without rendering. E/W lines are rendered, stripped of color sequences, and
- * re-emitted in the compact "<level> <tag>: <message>\n" form used by the
- * ring. */
+ * the level letter; with colors enabled it starts with an ANSI escape. Lines
+ * are filtered by level and tag (see log_line_wanted): E/W always, plus INFO
+ * from camera-related tags. Accepted lines are rendered, stripped of color
+ * sequences, and re-emitted in the compact "<level> <tag>: <message>\n" form
+ * used by the ring. */
 static void capture_v1_line(const char *fmt, va_list args)
 {
     const char *f = fmt;
@@ -310,9 +335,6 @@ static void capture_v1_line(const char *fmt, va_list args)
         }
     }
 
-    if (*f != 'E' && *f != 'W') {
-        return;
-    }
     if (f[1] != ' ' || f[2] != '(') {
         return;
     }
@@ -369,6 +391,10 @@ static void capture_v1_line(const char *fmt, va_list args)
     }
     memcpy(s_line_tag, tag_start, tag_len);
     s_line_tag[tag_len] = '\0';
+
+    if (!log_line_wanted(*p, s_line_tag)) {
+        return;
+    }
 
     static char out[SYSTEM_LOG_LINE_MAX + SYSTEM_LOG_TAG_MAX + 8];
     int m = snprintf(out, sizeof(out), "%c %s: %.*s\n", *p, s_line_tag, (int)msg_len, msg_start);

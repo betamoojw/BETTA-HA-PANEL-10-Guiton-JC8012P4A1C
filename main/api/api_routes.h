@@ -50,6 +50,7 @@ esp_err_t api_restore_post_handler(httpd_req_t *req);
 #if CONFIG_APP_FEATURE_LOCAL_CAMERA
 esp_err_t api_camera_local_snapshot_get_handler(httpd_req_t *req);
 esp_err_t api_camera_local_status_get_handler(httpd_req_t *req);
+esp_err_t api_camera_local_motion_get_handler(httpd_req_t *req);
 esp_err_t api_camera_local_stream_get_handler(httpd_req_t *req);
 void api_camera_local_set_stream_enabled(bool enabled);
 bool api_camera_local_get_stream_enabled(void);
