@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: LicenseRef-FNCL-1.1 | Copyright (c) 2026 Cpt_Kirk -->
 <img src="images/BETTAOS.jpg" alt="BETTA OS Logo" width="10%" />
 
-# BETTA HA Panel — Guiton 10 (10.1") · JC8012P4A1C-I-W-Y
+# BETTA HA Panel — Guiton 10 (10.1") · JC8012P4A1C-I-W-Y (V2)
 
-> **EN** — Runtime-configurable diagnostic wall panel for **Home Assistant + Glances**, running on the **Guition JC8012P4A1C-I-W-Y** 10.1-inch ESP32-P4 touch display. Build your dashboard directly on the device — no YAML edits, no firmware rebuilds. This is the `panel10jc` variant of **BETTA HA Panel** by **Cpt_Kirk (cptkirki)**.
+> **EN** — Runtime-configurable diagnostic wall panel for **Home Assistant + Glances**, running on the **Guition JC8012P4A1C-I-W-Y (V2)** 10.1-inch ESP32-P4 touch display. Build your dashboard directly on the device — no YAML edits, no firmware rebuilds. This is the `panel10jc` variant of **BETTA HA Panel** by **Cpt_Kirk (cptkirki)**.
 >
-> **PL** — Konfigurowalny w locie panel diagnostyczny dla **Home Assistant + Glances**, działający na 10,1-calowym wyświetlaczu dotykowym **Guition JC8012P4A1C-I-W-Y** (ESP32-P4). Pulpit budujesz bezpośrednio na urządzeniu — bez edycji YAML i bez ponownej kompilacji. To wariant `panel10jc` projektu **BETTA HA Panel** autorstwa **Cpt_Kirk (cptkirki)**.
+> **PL** — Konfigurowalny w locie panel diagnostyczny dla **Home Assistant + Glances**, działający na 10,1-calowym wyświetlaczu dotykowym **Guition JC8012P4A1C-I-W-Y (V2)** (ESP32-P4). Pulpit budujesz bezpośrednio na urządzeniu — bez edycji YAML i bez ponownej kompilacji. To wariant `panel10jc` projektu **BETTA HA Panel** autorstwa **Cpt_Kirk (cptkirki)**.
 
 **GitHub „About" (opis repozytorium):** `ESP32-P4 · 10.1" · Home Assistant + Glances diagnostic wall panel with on-device web editor, graphical screensaver, energy dashboard and server/network monitoring. Wariant Guition JC8012P4A1C-I-W-Y (panel10jc).`
 
@@ -41,6 +41,18 @@
 | Main menu / Menu główne | Screensaver / Wygaszacz |
 |-------------------------|-------------------------|
 | <img src="images/shots/photo_panel_main.jpg" alt="Working panel — main menu" width="360"> | <img src="images/shots/photo_panel_screensaver.jpg" alt="Working panel — screensaver" width="360"> |
+
+### Hardware revision / Rewizja sprzętowa — V2
+
+**EN** — This panel and its firmware target the **V2** revision of the
+JC8012P4A1C-I-W-Y board. **PL** — Ten panel i jego firmware dotyczą rewizji **V2**
+płytki JC8012P4A1C-I-W-Y.
+
+| SKU label / Etykieta SKU |
+|--------------------------|
+| <img src="images/sku-v2.jpg" alt="SKU label: 10153001-V2 (2628)" width="420"> |
+
+**SKU:** `10153001-V2 (2628)` · P4 · 10.1" capacitive touch · Models: JC8012P4A1C_I_W_Y · Resolution: 800×1280
 
 ---
 
@@ -89,6 +101,8 @@
 | Item / Element                | Value / Wartość                                                                 |
 |-------------------------------|---------------------------------------------------------------------------------|
 | Board / Płytka                | Guition **JC8012P4A1C-I-W-Y**                                                   |
+| Revision / Rewizja            | **V2**                                                                          |
+| SKU                           | `10153001-V2 (2628)`                                                            |
 | SoC                           | ESP32-P4, 32 MB flash, Hex PSRAM @ 200 MHz                                      |
 | Display / Wyświetlacz         | 10.1" **1280×800** landscape (MIPI-DSI **JD9365**, 800×1280 rotated 270°)       |
 | Touch / Dotyk                 | **GSL3680** capacitive (I2C: SDA GPIO7, SCL GPIO8; RST GPIO22, INT GPIO21)      |

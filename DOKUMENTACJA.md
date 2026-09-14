@@ -35,6 +35,18 @@ firmware, aby zmienić układ.
 | Storage for config / Pamięć konfiguracji            | NVS + optional SD card       |
 | Update path / Aktualizacja                          | OTA (file or URL)            |
 
+### Hardware revision / Rewizja sprzętowa — V2
+
+**EN** — This panel and its firmware target the **V2** revision of the
+JC8012P4A1C-I-W-Y board (SKU `10153001-V2 (2628)`).
+
+**PL** — Ten panel i jego firmware dotyczą rewizji **V2** płytki
+JC8012P4A1C-I-W-Y (SKU `10153001-V2 (2628)`).
+
+| SKU label / Etykieta SKU |
+|--------------------------|
+| <img src="images/sku-v2.jpg" alt="SKU label: 10153001-V2 (2628)" width="420"> |
+
 ---
 
 ## 2. Architecture / Architektura
