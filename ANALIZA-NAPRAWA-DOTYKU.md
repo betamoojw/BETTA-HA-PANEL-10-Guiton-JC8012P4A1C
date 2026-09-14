@@ -4,6 +4,8 @@ Data: 2026-09-12
 Firmware: `betta-ha-panel-10jc` v0.8.2-10jc
 Stan końcowy: **panel się uruchamia, ekran i dotyk działają poprawnie** (kafelki aktywują się dokładnie pod palcem).
 
+> English version: [TOUCH-REPAIR-ANALYSIS.md](./TOUCH-REPAIR-ANALYSIS.md)
+
 ---
 
 ## 1. Sprzęt i środowisko
