@@ -154,7 +154,7 @@ static void ui_widget_factory_apply_bg_image(ui_widget_instance_t *instance)
         return;
     }
 
-    if (!ui_image_load_png_file(instance->bg_image, w, h, &instance->bg_image_dsc)) {
+    if (!ui_image_load_file(instance->bg_image, w, h, &instance->bg_image_dsc)) {
         ESP_LOGW("ui_widget_factory", "bg image load failed for widget %s: %s", instance->id,
                  instance->bg_image);
         return;

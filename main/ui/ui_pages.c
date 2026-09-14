@@ -607,10 +607,59 @@ lv_obj_t *ui_pages_add(const char *page_id, const char *title)
     return container;
 }
 
+static void ui_pages_anim_x_cb(void *var, int32_t value)
+{
+    lv_obj_set_x((lv_obj_t *)var, value);
+}
+
+static void ui_pages_anim_opa_cb(void *var, int32_t value)
+{
+    lv_obj_set_style_opa((lv_obj_t *)var, (lv_opa_t)value, LV_PART_MAIN);
+}
+
+/* Slide the freshly shown page in from the side while fading it in. Opacity is
+ * inherited by child widgets, so the whole page transitions as one unit. */
+static void ui_pages_animate_enter(lv_obj_t *obj, bool from_right)
+{
+    if (obj == NULL) {
+        return;
+    }
+
+    const lv_coord_t base_x = 0;
+    const lv_coord_t from_x = from_right ? 28 : -28;
+
+    lv_obj_set_style_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_x(obj, from_x);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, obj);
+    lv_anim_set_values(&a, from_x, base_x);
+    lv_anim_set_duration(&a, 200);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&a, ui_pages_anim_x_cb);
+    lv_anim_start(&a);
+
+    lv_anim_t b;
+    lv_anim_init(&b);
+    lv_anim_set_var(&b, obj);
+    lv_anim_set_values(&b, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_duration(&b, 200);
+    lv_anim_set_path_cb(&b, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&b, ui_pages_anim_opa_cb);
+    lv_anim_start(&b);
+}
+
 bool ui_pages_show_index(uint16_t index)
 {
     if (index >= s_page_count) {
         return false;
+    }
+
+    bool from_right = true;
+    if (s_current_index >= 0 && (uint16_t)s_current_index != index && s_page_count > 1) {
+        uint16_t forward = (uint16_t)(((uint16_t)s_current_index + 1) % s_page_count);
+        from_right = (forward == index);
     }
 
     for (uint16_t i = 0; i < s_page_count; i++) {
@@ -624,6 +673,7 @@ bool ui_pages_show_index(uint16_t index)
         }
     }
     s_current_index = (int16_t)index;
+    ui_pages_animate_enter(s_pages[index].container, from_right);
     ui_pages_apply_tab_style(index);
     if (s_show_cb != NULL) {
         s_show_cb(s_pages[index].id, index);

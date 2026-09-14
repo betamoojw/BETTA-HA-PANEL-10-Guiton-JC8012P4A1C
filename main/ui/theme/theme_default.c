@@ -26,6 +26,11 @@ static void theme_default_configure_styles(void)
 #else
     lv_style_set_border_width(&s_style_card, 0);
 #endif
+    lv_style_set_shadow_width(&s_style_card, 10);
+    lv_style_set_shadow_ofs_x(&s_style_card, 0);
+    lv_style_set_shadow_ofs_y(&s_style_card, 3);
+    lv_style_set_shadow_opa(&s_style_card, LV_OPA_30);
+    lv_style_set_shadow_color(&s_style_card, lv_color_black());
 
     lv_style_set_bg_color(&s_style_button_off, lv_color_hex(APP_UI_COLOR_CARD_BG_OFF));
     lv_style_set_bg_opa(&s_style_button_off, LV_OPA_COVER);
