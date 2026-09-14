@@ -266,12 +266,31 @@ to standardowe AP konfiguracyjne `192.168.4.1` i publiczny endpoint OTA Xiaozhi.
 
 ## 11. Build & flash quick reference / Budowanie i wgrywanie — skrót
 
+> ⚠️ **Ważne (Windows):** idf.py na systemie z polską/kodową stroną cp1250
+> potrafi się wywalić na znaku `≥` (`UnicodeEncodeError: 'charmap' codec can't
+> encode character '\u2265'`). Zawsze wymuszaj UTF-8 przez `PYTHONUTF8=1` /
+> `PYTHONIOENCODING=utf-8` przed uruchomieniem idf.py.
+
+**Najprościej — gotowy skrypt** (eksportuje ESP-IDF, wymusza UTF-8, ustawia
+target i buduje):
+
+```powershell
+pwsh tools/build_panel10jc.ps1
+# z czyszczeniem:        pwsh tools/build_panel10jc.ps1 -Clean
+# z wgraniem po buildzie: pwsh tools/build_panel10jc.ps1 -Flash -Port COM3
+```
+
+**Ręcznie:**
+
 ```powershell
 # 1) Configure + build (variant panel10jc)
-#    Target ESP32-P4 jest zadeklarowany w sdkconfig.defaults
-#    (CONFIG_IDF_TARGET="esp32p4"), więc `set-target` nie jest wymagane.
+#    UWAGA: sdkconfig.defaults NIE zawiera CONFIG_IDF_TARGET — dla świeżego
+#    build-panel10jc trzeba najpierw ustawić target esp32p4.
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 . C:\Espressif\frameworks\esp-idf\export.ps1
-idf.py -B build-panel10jc -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.panel10jc" build
+$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'
+idf.py -B build-panel10jc -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.panel10jc" set-target esp32p4
+idf.py -B build-panel10jc build
 
 # 2) Package release images
 pwsh tools/make_factory_bin.ps1 -Variant panel10jc
