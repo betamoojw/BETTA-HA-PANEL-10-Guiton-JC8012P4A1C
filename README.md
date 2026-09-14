@@ -49,28 +49,36 @@
 **EN**
 - **Live Home Assistant link** — WebSocket connection with REST fallback (forecasts, long-poll states).
 - **On-device editor** — BETTA Editor in the browser at `http://<panel-ip>`; multi-page layouts, drag-and-drop, room-grouped entity picker. No rebuild needed.
-- **Widget library** — sensor tile, temperature tile (text + graphic modes), machine/CPU tile, servers tile, network tile (LAN/WAN/TCP/UDP), Glances tile, light, switch, button, slider, graph, monitor, entity list, gauge/bars, weather (up to 5-day forecast), media player, todo, Roborock, energy dashboard.
+- **Widget library** — sensor, temperature (text + graphic ring), weather (current + up to 5-day forecast), binary sensor, presence, light, switch, button, slider, cover, fan, heating, lock, number, select, media player, todo, Roborock, graph, monitor, entity list, gauge/bars, energy dashboard; Quick Setup presets: machine/CPU, servers, network (LAN/WAN/TCP/UDP), Glances.
+- **Built-in camera** — OV02C10 MIPI-CSI: JPEG snapshot, MJPEG stream for HA, motion detection (sensitivity, zones, min area/duration, cooldown, ignore lighting) with motion-based screen wake, H/V flip, JPEG quality.
+- **IP cameras** — up to 4 Home Assistant `camera.*` entities or HTTP snapshot URLs.
+- **Xiaozhi AI** — built-in voice assistant (off by default; enable in Settings → Xiaozhi AI + cloud pairing).
+- **Tile styling** — per-tile font size and scale, tile display styles (gauge/bars/arc, graphic ring), theme colours, UI scale and font settings.
 - **Energy dashboard** — automatic grid / solar / battery / gas / water flow from the Home Assistant energy model.
 - **Graphs** — line, smoothed line, bar charts; event-rate sampling up to 4096 points with progressive decimation.
 - **Graphical screensaver** — full-screen wallpaper (SD card) + optional clock, dim-after-idle, night mode, per-state brightness sliders.
 - **System settings** — daily auto-restart, volume, backlight/screen-power control, static IP, log viewer.
 - **First-run provisioning** — `BETTA-Setup` Wi-Fi AP, guided Wi-Fi + Home Assistant setup, Quick Setup starter dashboard.
 - **OTA updates** — upload `.ota.bin` or point to an OTA URL from the editor.
-- **Multilingual** — English, German, Spanish, French + custom translation JSON upload/download.
+- **Multilingual** — English, German, Spanish, French, Polish + custom translation JSON upload/download.
 - **SD card backup** — export/import full configuration (menu, entities, layout) to/from SD as a backup copy.
 - **Entity scale** — imports up to **3600** Home Assistant entities (`APP_HA_MAX_ENTITIES`).
 
 **PL**
 - **Połączenie na żywo z Home Assistant** — WebSocket z fallbackiem REST (prognozy, long-poll).
 - **Edytor na urządzeniu** — BETTA Editor w przeglądarce pod `http://<ip-panelu>`; układy wielostronicowe, przeciąganie, grupowany wybór encji. Bez kompilacji.
-- **Biblioteka kafelków** — kafelek czujnika, kafelek temperatury (tryb tekstowy + graficzny), kafelek maszyna/CPU, serwery, sieć (LAN/WAN/TCP/UDP), Glances, światło, przełącznik, przycisk, suwak, wykres, monitor, lista encji, wskaźniki/paski, pogoda (do 5 dni), media player, todo, Roborock, panel energii.
+- **Biblioteka kafelków** — czujnik, temperatura (tekst + pierścień graficzny), pogoda (bieżąca + prognoza do 5 dni), czujnik binarny, obecność, światło, przełącznik, przycisk, suwak, osłony (cover), wentylator, ogrzewanie, zamek, liczba, wybór, media player, todo, Roborock, wykres, monitor, lista encji, wskaźniki/paski, panel energii; presety szybkiej konfiguracji: maszyna/CPU, serwery, sieć (LAN/WAN/TCP/UDP), Glances.
+- **Wbudowana kamera** — OV02C10 (MIPI-CSI): zdjęcie JPEG, strumień MJPEG do HA, detekcja ruchu (czułość, strefy, min. obszar/czas, cooldown, ignorowanie oświetlenia) z budzeniem ekranu ruchem, odbicie H/V, jakość JPEG.
+- **Kamery IP** — do 4 encji Home Assistant `camera.*` lub adresów URL zdjęć HTTP.
+- **Xiaozhi AI** — wbudowany asystent głosowy (domyślnie wyłączony; włącz w Ustawienia → Xiaozhi AI + parowanie z chmurą).
+- **Stylizacja kafelków** — rozmiar i skalowanie czcionki per kafelek, style wyświetlania (wskaźnik/paski/łuk, pierścień graficzny), kolory motywu, skalowanie UI i ustawienia czcionek.
 - **Panel energii** — automatyczna wizualizacja sieć / słońce / bateria / gaz / woda.
 - **Wykresy** — liniowe, wygładzone, słupkowe; próbkowanie do 4096 punktów z decymacją.
 - **Wygaszacz graficzny** — tapeta (karta SD) + opcjonalny zegar, przyciemnianie po bezczynności, tryb nocny, osobne suwaki jasności.
 - **Ustawienia systemowe** — codzienny automatyczny restart, głośność, sterowanie podświetleniem, statyczne IP, podgląd logów.
 - **Pierwsze uruchomienie** — AP `BETTA-Setup`, kreator Wi-Fi + Home Assistant, szybka konfiguracja pulpitu.
 - **Aktualizacje OTA** — wgranie `.ota.bin` lub URL OTA z edytora.
-- **Wielojęzyczność** — angielski, niemiecki, hiszpański, francuski + własne tłumaczenia (JSON).
+- **Wielojęzyczność** — angielski, niemiecki, hiszpański, francuski, polski + własne tłumaczenia (JSON).
 - **Backup na SD** — eksport/import pełnej konfiguracji (menu, encje, układ) jako kopia zapasowa.
 - **Skala encji** — import do **3600** encji Home Assistant (`APP_HA_MAX_ENTITIES`).
 

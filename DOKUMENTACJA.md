@@ -115,6 +115,14 @@ panelu; wszystkie zmiany działają na żywo.
 | Energy                     | HA energy model                                 | Grid/solar/battery/gas/water flow                                                |
 | Todo                       | HA `todo`                                       | Shopping/task lists                                                             |
 | Roborock                   | HA `vacuum`                                     | Robot vacuum status/map                                                          |
+| Cover                      | HA `cover`                                      | Open/close/position control (shutters, blinds)                                   |
+| Fan                        | HA `fan`                                        | Speed + preset control                                                           |
+| Heating                    | HA `climate`                                    | Target/current temperature, HVAC/fan/preset modes (tap for full control)        |
+| Lock                       | HA `lock`                                       | Lock / unlock                                                                    |
+| Number                     | HA `number` / `input_number`                    | Numeric value set                                                                |
+| Select                     | HA `select` / `input_select`                    | Option list selection                                                            |
+| Binary sensor              | HA `binary_sensor`                              | On/off state + icon                                                              |
+| Presence                   | HA `person` / `device_tracker`                  | Presence / occupancy indicator                                                   |
 
 **EN** — Every tile has an entity picker with per-field inputs (each tile groups
 its entities into separate fields so values never mix), plus font, size, color
@@ -155,9 +163,10 @@ rozmiaru, koloru i skali w edytorze.
 | Wi-Fi                    | SSID, password, country, BSSID lock, scan                                            |
 | Home Assistant           | Base URL + long-lived access token                                                   |
 | Xiaozhi AI               | Built in — disabled by default (enable in Settings → Xiaozhi AI + cloud pairing; no tokens) |
+| Kamera (Camera)          | Built-in OV02C10: on/off, motion wake, sensitivity, JPEG quality, H/V flip, MJPEG stream, motion zones; IP cameras (up to 4 `camera.*` entities or HTTP snapshots) |
 | Karta SD (SD card)       | Mount status, storage info, config export/import (backup)                            |
 | Czas (Time)              | NTP server, timezone                                                                  |
-| Interfejs (Interface)    | Language (EN/DE/ES/FR + custom JSON), UI scale, font scale                           |
+| Interfejs (Interface)    | Language (EN/DE/ES/FR/PL + custom JSON), UI scale, font scale                        |
 | Ekran / Wygaszacz        | Wallpaper upload, clock on/off, screensaver brightness slider, dim-after-idle, night mode |
 | System                   | Daily auto-restart hour, volume, reboot, log viewer                                   |
 | Motyw (Theme)            | Theme/color selection                                                                 |
