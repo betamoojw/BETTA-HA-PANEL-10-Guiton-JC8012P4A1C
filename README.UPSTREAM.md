@@ -43,7 +43,7 @@ Changes relative to upstream (build variant `panel10jc`):
 | Touch driver                             | Added **GSL3680** I2C capacitive-touch bring-up                                   |
 | Backlight                                | LEDC PWM on GPIO23                                                               |
 | Network                                  | ESP32-C6 ESP-Hosted SDIO co-processor                                           |
-| Cameras / Cameras                        | **Removed** (variant ships without camera support)                                |
+| Cameras / Cameras                        | **Built-in OV02C10 enabled** (motion wake, snapshot, MJPEG, zones) + **IP cameras** |
 | Xiaozhi AI / Xiaozhi AI                  | **Built in, disabled by default** (no tokens bundled; enable in Settings + cloud pairing) |
 | Entity scale / Entity scale              | `APP_HA_MAX_ENTITIES` raised to **3600**                                         |
 | Screensaver / Screensaver                | Graphical wallpaper + clock, brightness slider, dim-after-idle, night mode       |
@@ -103,7 +103,7 @@ Zmiany względem oryginału (wariant kompilacji `panel10jc`):
 | Sterownik dotyku                          | Dodano obsługę dotyku pojemnościowego **GSL3680** (I2C)                            |
 | Podświetlenie                             | PWM LEDC na GPIO23                                                               |
 | Sieć                                      | Koprocesor ESP32-C6 ESP-Hosted SDIO                                              |
-| Kamery                                    | **Usunięte** (wariant bez kamer)                                                  |
+| Kamery                                    | **Wbudowana OV02C10 włączona** (budzenie ruchem, snapshot, MJPEG, strefy) + **kamery IP** |
 | Xiaozhi AI                                | **Wkompilowane, domyślnie wyłączone** (bez tokenów; włącz w Ustawienia + parowanie z chmurą) |
 | Skala encji                               | `APP_HA_MAX_ENTITIES` podniesione do **3600**                                     |
 | Wygaszacz                                 | Tapeta graficzna + zegar, suwak jasności, przyciemnianie, tryb nocny              |

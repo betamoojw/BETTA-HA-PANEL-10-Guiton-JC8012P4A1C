@@ -97,7 +97,7 @@
 ## 🚀 Getting started / Szybki start
 
 **EN**
-1. **Flash** the factory image (`release/betta86-ha-panel-v0.8.2-panel10.factory.bin`) with any ESP32 flasher, e.g. browser-based [esptool-js](https://espressif.github.io/esptool-js/) — use the outer USB-C port, baud `115200`, offset `0x0`.
+1. **Flash** the factory image (`release/betta86-ha-panel-v0.8.2-panel10jc.factory.bin`) with any ESP32 flasher, e.g. browser-based [esptool-js](https://espressif.github.io/esptool-js/) — use the outer USB-C port, baud `115200`, offset `0x0`.
 2. **Reboot** — the panel opens a Wi-Fi AP named `BETTA-Setup`.
 3. Connect to `BETTA-Setup`, open `http://192.168.4.1`, choose country, scan and save your Wi-Fi.
 4. After reboot the panel joins your LAN. Open its IP in a browser, link Home Assistant with a long-lived access token, build your first page via **Quick Setup**.
@@ -105,7 +105,7 @@
 6. Future updates install via **OTA** from the editor — no cable needed.
 
 **PL**
-1. **Wgraj** obraz fabryczny (`release/betta86-ha-panel-v0.8.2-panel10.factory.bin`) dowolnym programem ESP32, np. [esptool-js](https://espressif.github.io/esptool-js/) — port USB-C, baud `115200`, offset `0x0`.
+1. **Wgraj** obraz fabryczny (`release/betta86-ha-panel-v0.8.2-panel10jc.factory.bin`) dowolnym programem ESP32, np. [esptool-js](https://espressif.github.io/esptool-js/) — port USB-C, baud `115200`, offset `0x0`.
 2. **Zrestartuj** — panel uruchomi AP Wi-Fi o nazwie `BETTA-Setup`.
 3. Połącz się z `BETTA-Setup`, otwórz `http://192.168.4.1`, wybierz kraj, zeskanuj i zapisz swoją sieć.
 4. Po restarcie panel dołącza do Twojej sieci LAN. Otwórz jego IP w przeglądarce, połącz Home Assistant tokenem długoterminowym i zbuduj pierwszą stronę przez **Szybką konfigurację**.
@@ -120,8 +120,15 @@ Prerequisites / Wymagania: **ESP-IDF v5.5.5**, Python 3.11+, local BSP shim `com
 
 ```powershell
 # Guiton 10 (this variant / ten wariant)
+# Easiest / Najprościej — ready script (exports ESP-IDF, forces UTF-8, sets target, builds):
+pwsh tools/build_panel10jc.ps1        # options: -Clean, -Flash -Port COM3
+
+# ...or manually / ...albo ręcznie:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 . C:\Espressif\frameworks\esp-idf\export.ps1
-idf.py -B build-panel10jc -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.panel10jc" build
+$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'
+idf.py -B build-panel10jc -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.panel10jc" set-target esp32p4
+idf.py -B build-panel10jc build
 
 # Package release images (factory + OTA) / Pakowanie obrazów (factory + OTA)
 pwsh tools/make_factory_bin.ps1 -Variant panel10jc
@@ -129,7 +136,8 @@ pwsh tools/make_factory_bin.ps1 -Variant panel10jc
 
 Build artifacts land in `build-panel10jc/`; factory/OTA images land in `release/` and `release/ota/`. The ready-to-flash app binary is also provided in [`Binary/`](Binary/).
 
-> **Note / Uwaga:** the ESP32-P4 target is declared in [`sdkconfig.defaults`](sdkconfig.defaults) (`CONFIG_IDF_TARGET="esp32p4"`), so a fresh clone builds **without** running `idf.py set-target` first. / Target ESP32-P4 jest zadeklarowany w [`sdkconfig.defaults`](sdkconfig.defaults), więc świeży klon buduje się **bez** `idf.py set-target`.
+> **⚠️ Windows note / Uwaga (Windows):** force UTF-8 for Python — otherwise `idf.py` can crash on the `≥` character when the console uses codepage cp1250 (`UnicodeEncodeError`). The script `tools/build_panel10jc.ps1` does this automatically; manually set `$env:PYTHONUTF8='1'` and `$env:PYTHONIOENCODING='utf-8'`. / Wymuś UTF-8 dla Pythona — inaczej `idf.py` potrafi się wywalić na znaku `≥` przy stronie kodowej cp1250 (`UnicodeEncodeError`). Skrypt `tools/build_panel10jc.ps1` robi to automatycznie; ręcznie ustaw `$env:PYTHONUTF8='1'` i `$env:PYTHONIOENCODING='utf-8'`.
+> **Note / Uwaga:** `sdkconfig.defaults` does **not** declare `CONFIG_IDF_TARGET`, so a fresh clone must run `idf.py set-target esp32p4` once (the script does it for you). / `sdkconfig.defaults` **nie** zawiera `CONFIG_IDF_TARGET`, więc świeży klon musi raz wykonać `idf.py set-target esp32p4` (skrypt robi to za Ciebie).
 > `managed_components/` is **vendored** in this repository so the build works offline (the C6 Wi-Fi coprocessor drivers included). / `managed_components/` jest **dołączony** do repozytorium, więc build działa offline (ze sterownikami koprocesora Wi-Fi C6).
 > Generated `sdkconfig` and `build*/` are regenerated on first configure. The generated font `.c` files and `main/idf_component.yml` **are** included so the project builds out of the box.
 
@@ -146,7 +154,7 @@ Build artifacts land in `build-panel10jc/`; factory/OTA images land in `release/
 | `components/webui/www/`        | BETTA Editor web app (served from the panel)                                       |
 | `release/`                     | Factory + OTA images for all panel variants                                        |
 | `Binary/`                      | Ready-to-flash `betta-ha-panel-10jc.bin` (+ zip)                                   |
-| `tools/`                       | `make_factory_bin.ps1` — image packaging helper                                    |
+| `tools/`                       | `build_panel10jc.ps1` (one-command build) · `make_factory_bin.ps1` (factory+OTA packaging) |
 | `images/`                      | Screenshots, logo and example photos used by this README                            |
 
 > **Documentation / Dokumentacja:** [`DOKUMENTACJA.md`](DOKUMENTACJA.md) — pełna instrukcja (PL/EN) · [`JAK-URUCHOMIC-DOTYK-GSL3680.md`](JAK-URUCHOMIC-DOTYK-GSL3680.md) — uruchomienie dotyku Guiton krok po kroku · [`ANALIZA-NAPRAWA-DOTYKU.md`](ANALIZA-NAPRAWA-DOTYKU.md) — analiza bootloop + naprawa dotyku · [`release-notes.md`](release-notes.md) — historia zmian

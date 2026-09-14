@@ -2,7 +2,7 @@ param(
     [string]$BuildDir = "",
     [string]$OutFile = "",
     [string]$OtaOutFile = "",
-    [ValidateSet("panel4", "panel10", "panels3", "both", "auto")]
+    [ValidateSet("panel4", "panel10", "panel10jc", "panels3", "both", "auto")]
     [string]$Variant = "auto"
 )
 
@@ -491,15 +491,16 @@ function Invoke-VariantBuild {
 # --- Decide which variants to build ----------------------------------------
 # Known variants and their expected build directories / filename suffixes.
 $variantMap = @{
-    "panel4"   = [PSCustomObject]@{ BuildDir = "build-panel4";   Suffix = "panel4"   }
-    "panel10"  = [PSCustomObject]@{ BuildDir = "build-panel10";  Suffix = "panel10"  }
-    "panels3"  = [PSCustomObject]@{ BuildDir = "build-panels3";  Suffix = "panels3"  }
+    "panel4"    = [PSCustomObject]@{ BuildDir = "build-panel4";    Suffix = "panel4"    }
+    "panel10"   = [PSCustomObject]@{ BuildDir = "build-panel10";   Suffix = "panel10"   }
+    "panel10jc" = [PSCustomObject]@{ BuildDir = "build-panel10jc"; Suffix = "panel10jc" }
+    "panels3"   = [PSCustomObject]@{ BuildDir = "build-panels3";   Suffix = "panels3"   }
 }
 
 $variantsToBuild = @()
 
 if ($Variant -eq "both") {
-    foreach ($v in @("panel4", "panel10", "panels3")) {
+    foreach ($v in @("panel4", "panel10", "panel10jc", "panels3")) {
         $info = $variantMap[$v]
         $path = Join-Path $repoRoot $info.BuildDir
         if (-not (Test-Path $path)) {
@@ -507,7 +508,7 @@ if ($Variant -eq "both") {
         }
         $variantsToBuild += [PSCustomObject]@{ Name = $v; BuildDir = $path; Suffix = $info.Suffix }
     }
-} elseif ($Variant -eq "panel4" -or $Variant -eq "panel10" -or $Variant -eq "panels3") {
+} elseif ($Variant -eq "panel4" -or $Variant -eq "panel10" -or $Variant -eq "panel10jc" -or $Variant -eq "panels3") {
     $info = $variantMap[$Variant]
     $buildRoot = if ([string]::IsNullOrWhiteSpace($BuildDir)) { (Join-Path $repoRoot $info.BuildDir) } else { $BuildDir }
     $variantsToBuild += [PSCustomObject]@{ Name = $Variant; BuildDir = $buildRoot; Suffix = $info.Suffix }
@@ -516,7 +517,7 @@ if ($Variant -eq "both") {
     if (-not [string]::IsNullOrWhiteSpace($BuildDir)) {
         $variantsToBuild += [PSCustomObject]@{ Name = "custom"; BuildDir = $BuildDir; Suffix = "" }
     } else {
-        foreach ($v in @("panel4", "panel10", "panels3")) {
+        foreach ($v in @("panel4", "panel10", "panel10jc", "panels3")) {
             $info = $variantMap[$v]
             $path = Join-Path $repoRoot $info.BuildDir
             if (Test-Path $path) {
@@ -527,7 +528,7 @@ if ($Variant -eq "both") {
             # Last-ditch fallback to the historical default.
             $legacy = Join-Path $repoRoot "build"
             if (-not (Test-Path $legacy)) {
-                throw "No build directory found. Expected one of: build-panel4/, build-panel10/, build-panels3/, build/. Run ``idf.py -B build-panel4 build`` (or similar) first."
+                throw "No build directory found. Expected one of: build-panel4/, build-panel10/, build-panel10jc/, build-panels3/, build/. Run ``idf.py -B build-panel4 build`` (or similar) first."
             }
             $variantsToBuild += [PSCustomObject]@{ Name = "legacy"; BuildDir = $legacy; Suffix = "" }
         }
