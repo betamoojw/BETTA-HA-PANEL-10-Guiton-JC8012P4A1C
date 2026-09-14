@@ -20,6 +20,7 @@ lv_obj_t *ui_pages_add(const char *page_id, const char *title);
 bool ui_pages_show(const char *page_id);
 bool ui_pages_show_index(uint16_t index);
 bool ui_pages_next(void);
+bool ui_pages_prev(void);
 const char *ui_pages_current_id(void);
 /* Register a single callback that is invoked whenever the active page
  * changes (after the new page has been made visible).  Passing NULL

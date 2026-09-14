@@ -25,6 +25,7 @@ static int16_t s_current_index = -1;
 static ui_pages_show_cb_t s_show_cb = NULL;
 static ui_pages_action_cb_t s_gear_cb = NULL;
 static ui_pages_action_cb_t s_screen_built_cb = NULL;
+static bool s_swipe_registered = false;
 
 void ui_pages_set_show_callback(ui_pages_show_cb_t cb)
 {
@@ -491,6 +492,8 @@ static void ui_pages_create_nav(lv_obj_t *screen)
     }
 }
 
+static void ui_pages_register_swipe(void);
+
 void ui_pages_init(void)
 {
     memset(s_pages, 0, sizeof(s_pages));
@@ -528,6 +531,9 @@ void ui_pages_init(void)
     lv_obj_t *screen = lv_scr_act();
     lv_obj_clean(screen);
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    /* Make empty screen areas pressable so swipe gestures register even when
+     * the swipe does not start on a tile (see ui_pages_register_swipe). */
+    lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(APP_UI_COLOR_SCREEN_BG), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(screen, 0, LV_PART_MAIN);
@@ -569,6 +575,8 @@ void ui_pages_init(void)
     ui_pages_set_topbar_datetime(&info);
     ui_pages_set_topbar_status(false, false, false, false);
     ui_pages_apply_tab_style(0);
+
+    ui_pages_register_swipe();
 
     if (s_screen_built_cb != NULL) {
         s_screen_built_cb();
@@ -615,6 +623,43 @@ static void ui_pages_anim_x_cb(void *var, int32_t value)
 static void ui_pages_anim_opa_cb(void *var, int32_t value)
 {
     lv_obj_set_style_opa((lv_obj_t *)var, (lv_opa_t)value, LV_PART_MAIN);
+}
+
+/* Swipe left/right anywhere on a page flips to the next/previous page. The
+ * gesture is detected by LVGL itself and forwarded to the touch indev, so this
+ * works regardless of which tile the swipe started on (except scrollable
+ * widgets, which keep the gesture for their own scrolling). */
+static void ui_pages_swipe_cb(lv_event_t *e)
+{
+    /* For indev-list events the target is the indev, the param is the pressed
+     * object (mirrors touch_activity_event_cb in the touch drivers). */
+    lv_indev_t *indev = (lv_indev_t *)lv_event_get_target(e);
+    if (indev == NULL) {
+        indev = lv_indev_get_next(NULL);
+    }
+    if (indev == NULL) {
+        return;
+    }
+
+    lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+    if (dir == LV_DIR_LEFT) {
+        ui_pages_next();
+    } else if (dir == LV_DIR_RIGHT) {
+        ui_pages_prev();
+    }
+}
+
+static void ui_pages_register_swipe(void)
+{
+    if (s_swipe_registered) {
+        return;
+    }
+    lv_indev_t *indev = lv_indev_get_next(NULL);
+    if (indev == NULL) {
+        return;
+    }
+    lv_indev_add_event_cb(indev, ui_pages_swipe_cb, LV_EVENT_GESTURE, NULL);
+    s_swipe_registered = true;
 }
 
 /* Slide the freshly shown page in from the side while fading it in. Opacity is
@@ -701,6 +746,16 @@ bool ui_pages_next(void)
     }
     uint16_t next = (uint16_t)(((s_current_index < 0 ? 0 : s_current_index) + 1) % s_page_count);
     return ui_pages_show_index(next);
+}
+
+bool ui_pages_prev(void)
+{
+    if (s_page_count == 0) {
+        return false;
+    }
+    int16_t cur = (s_current_index < 0) ? 0 : s_current_index;
+    uint16_t prev = (uint16_t)((cur - 1 + (int16_t)s_page_count) % s_page_count);
+    return ui_pages_show_index(prev);
 }
 
 const char *ui_pages_current_id(void)
