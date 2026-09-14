@@ -8,6 +8,8 @@ Panel: **ESP32-P4 v1.3** + ekran **JD9365** (MIPI-DSI 2-lane, natywnie
 800×1280 portret) + dotyk **GSL3680** (I2C). Firmware `betta-ha-panel-10jc`
 v0.8.2-10jc, ESP-IDF v5.5.5.
 
+> English version: [HOW-TO-ENABLE-GSL3680-TOUCH.md](./HOW-TO-ENABLE-GSL3680-TOUCH.md)
+
 ---
 
 ## Spis treści
