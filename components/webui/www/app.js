@@ -306,6 +306,7 @@ const SETTINGS_NAV_ITEMS = [
   { sectionId: "settingsLocalCamSection", headingId: "settingsLocalCamHeading", labelKey: "settings.localCam.heading", feature: "local_camera" },
   { sectionId: "settingsTimeSection", headingId: "settingsTimeHeading", labelKey: "settings.time.heading" },
   { sectionId: "settingsUiSection", headingId: "settingsUiHeading", labelKey: "settings.ui.heading" },
+  { sectionId: "settingsTopbarSection", headingId: "settingsTopbarHeading", labelKey: "settings.topbar.heading" },
   { sectionId: "settingsDisplaySection", headingId: "settingsDisplayHeading", labelKey: "settings.display.heading" },
   { sectionId: "settingsSystemSection", headingId: "settingsSystemHeading", labelKey: "settings.system.heading" },
   { sectionId: "settingsThemeSection", headingId: "settingsThemeHeading", labelKey: "settings.theme.heading" },
@@ -752,6 +753,12 @@ const WEB_I18N_BUILTIN = {
     "settings.ui.upload_file": "Translation JSON File",
     "settings.ui.upload_button": "Upload / Add Language",
     "settings.ui.touch_test": "Touch test (show touch dots)",
+    "settings.topbar.heading": "Top bar",
+    "settings.topbar.show_clock": "Show clock / date",
+    "settings.topbar.show_room_name": "Show room name",
+    "settings.topbar.room_name": "Room name",
+    "settings.topbar.show_status": "Show Wi-Fi / HA status",
+    "settings.topbar.show_brightness": "Show brightness level",
     "settings.display.heading": "Display / Screen saver",
     "settings.display.screensaver_enabled": "Screen saver (clock + graphic instead of full off)",
     "settings.display.screensaver_clock": "Show clock on screen saver",
@@ -2291,6 +2298,12 @@ const WEB_I18N_BUILTIN = {
     "settings.ui.upload_file": "Plik JSON tłumaczenia",
     "settings.ui.upload_button": "Wgraj / dodaj język",
     "settings.ui.touch_test": "Test dotyku (pokaż kropki dotyku)",
+    "settings.topbar.heading": "Górny pasek",
+    "settings.topbar.show_clock": "Pokaż zegar / datę",
+    "settings.topbar.show_room_name": "Pokaż nazwę pokoju",
+    "settings.topbar.room_name": "Nazwa pokoju",
+    "settings.topbar.show_status": "Pokaż status Wi-Fi / HA",
+    "settings.topbar.show_brightness": "Pokaż poziom jasności",
     "settings.display.heading": "Ekran / Wygaszacz",
     "settings.display.screensaver_enabled": "Wygaszacz ekranu (zegar + grafika zamiast pełnego wyłączenia)",
     "settings.display.screensaver_clock": "Pokaż zegar na wygaszaczu",
@@ -2891,6 +2904,11 @@ const el = {
   settingsTimezone: document.getElementById("settingsTimezone"),
   settingsLanguage: document.getElementById("settingsLanguage"),
   settingsTouchTest: document.getElementById("settingsTouchTest"),
+  settingsTopbarShowClock: document.getElementById("settingsTopbarShowClock"),
+  settingsTopbarShowRoomName: document.getElementById("settingsTopbarShowRoomName"),
+  settingsTopbarRoomName: document.getElementById("settingsTopbarRoomName"),
+  settingsTopbarShowStatus: document.getElementById("settingsTopbarShowStatus"),
+  settingsTopbarShowBrightness: document.getElementById("settingsTopbarShowBrightness"),
   settingsDailyRestartHour: document.getElementById("settingsDailyRestartHour"),
   settingsAudioVolume: document.getElementById("settingsAudioVolume"),
   restartDeviceBtn: document.getElementById("restartDeviceBtn"),
@@ -3780,6 +3798,13 @@ function applyWebTranslations() {
   setTextById("uploadLanguageFileLabel", "settings.ui.upload_file");
   setTextById("uploadLanguageBtn", "settings.ui.upload_button");
 
+  setTextById("settingsTopbarHeading", "settings.topbar.heading");
+  setTextById("settingsTopbarShowClockLabel", "settings.topbar.show_clock");
+  setTextById("settingsTopbarShowRoomNameLabel", "settings.topbar.show_room_name");
+  setTextById("settingsTopbarRoomNameLabel", "settings.topbar.room_name");
+  setTextById("settingsTopbarShowStatusLabel", "settings.topbar.show_status");
+  setTextById("settingsTopbarShowBrightnessLabel", "settings.topbar.show_brightness");
+
   setTextById("settingsDisplayHeading", "settings.display.heading");
   setTextById("settingsScreensaverEnabledLabel", "settings.display.screensaver_enabled");
   setTextById("settingsScreensaverClockLabel", "settings.display.screensaver_clock");
@@ -4513,6 +4538,7 @@ function renderSettings() {
   const ui = settings.ui || {};
   const system = settings.system || {};
   const display = settings.display || {};
+  const topbar = settings.topbar || {};
   const scanSupported = wifi.scan_supported !== false;
   editor.wifiScanSupported = scanSupported;
 
@@ -4611,6 +4637,21 @@ function renderSettings() {
   }
   if (el.settingsTouchTest) {
     el.settingsTouchTest.checked = system.touch_test === true;
+  }
+  if (el.settingsTopbarShowClock) {
+    el.settingsTopbarShowClock.checked = topbar.show_clock !== false;
+  }
+  if (el.settingsTopbarShowRoomName) {
+    el.settingsTopbarShowRoomName.checked = topbar.show_room_name === true;
+  }
+  if (el.settingsTopbarRoomName) {
+    el.settingsTopbarRoomName.value = typeof topbar.room_name === "string" ? topbar.room_name : "";
+  }
+  if (el.settingsTopbarShowStatus) {
+    el.settingsTopbarShowStatus.checked = topbar.show_status !== false;
+  }
+  if (el.settingsTopbarShowBrightness) {
+    el.settingsTopbarShowBrightness.checked = topbar.show_brightness !== false;
   }
   if (el.settingsDailyRestartHour) {
     populateDailyRestartHour();
@@ -5868,6 +5909,11 @@ async function saveSettings() {
   const timezone = el.settingsTimezone.value.trim();
   const language = normalizeUiLanguage(el.settingsLanguage?.value);
   const touchTest = Boolean(el.settingsTouchTest?.checked);
+  const topbarShowClock = Boolean(el.settingsTopbarShowClock?.checked ?? true);
+  const topbarShowRoomName = Boolean(el.settingsTopbarShowRoomName?.checked);
+  const topbarRoomName = String(el.settingsTopbarRoomName?.value || "").trim().slice(0, 31);
+  const topbarShowStatus = Boolean(el.settingsTopbarShowStatus?.checked ?? true);
+  const topbarShowBrightness = Boolean(el.settingsTopbarShowBrightness?.checked ?? true);
   const dailyRestartHour = settingsInt(el.settingsDailyRestartHour?.value, -1, 23, -1);
   const audioVolume = settingsInt(el.settingsAudioVolume?.value, 0, 100, 70);
   const screensaverEnabled = Boolean(el.settingsScreensaverEnabled?.checked);
@@ -5928,6 +5974,13 @@ async function saveSettings() {
     },
     ui: {
       language,
+    },
+    topbar: {
+      show_clock: topbarShowClock,
+      show_room_name: topbarShowRoomName,
+      room_name: topbarRoomName,
+      show_status: topbarShowStatus,
+      show_brightness: topbarShowBrightness,
     },
     system: {
       touch_test: touchTest,

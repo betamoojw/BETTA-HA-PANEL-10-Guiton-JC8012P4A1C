@@ -264,9 +264,10 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
     cJSON *system = cJSON_CreateObject();
     cJSON *audio = cJSON_CreateObject();
     cJSON *display = cJSON_CreateObject();
+    cJSON *topbar = cJSON_CreateObject();
     if (root == NULL || wifi == NULL || ha == NULL || time_cfg == NULL || ui == NULL || xiaozhi == NULL ||
         sd == NULL || network == NULL || camera == NULL || camera_image == NULL || system == NULL ||
-        audio == NULL || display == NULL) {
+        audio == NULL || display == NULL || topbar == NULL) {
         cJSON_Delete(root);
         cJSON_Delete(wifi);
         cJSON_Delete(ha);
@@ -280,6 +281,7 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
         cJSON_Delete(system);
         cJSON_Delete(audio);
         cJSON_Delete(display);
+        cJSON_Delete(topbar);
         free(settings);
         return httpd_resp_send_500(req);
     }
@@ -426,6 +428,13 @@ esp_err_t api_settings_get_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(display, "screensaver_clock_enabled", power.screensaver_clock_enabled);
     cJSON_AddStringToObject(display, "screensaver_wallpaper", power.screensaver_wallpaper);
     cJSON_AddItemToObject(root, "display", display);
+
+    cJSON_AddBoolToObject(topbar, "show_clock", settings->topbar_show_clock);
+    cJSON_AddBoolToObject(topbar, "show_room_name", settings->topbar_show_room_name);
+    cJSON_AddStringToObject(topbar, "room_name", settings->topbar_room_name);
+    cJSON_AddBoolToObject(topbar, "show_status", settings->topbar_show_status);
+    cJSON_AddBoolToObject(topbar, "show_brightness", settings->topbar_show_brightness);
+    cJSON_AddItemToObject(root, "topbar", topbar);
 
     cJSON_AddBoolToObject(root, "ok", true);
 
@@ -595,6 +604,7 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
     cJSON *system = cJSON_GetObjectItemCaseSensitive(root, "system");
     cJSON *audio = cJSON_GetObjectItemCaseSensitive(root, "audio");
     cJSON *display = cJSON_GetObjectItemCaseSensitive(root, "display");
+    cJSON *topbar = cJSON_GetObjectItemCaseSensitive(root, "topbar");
     if (wifi != NULL && !cJSON_IsObject(wifi)) {
         cJSON_Delete(root);
         free(settings);
@@ -649,6 +659,11 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
         cJSON_Delete(root);
         free(settings);
         return send_json_error(req, "400 Bad Request", "display must be an object");
+    }
+    if (topbar != NULL && !cJSON_IsObject(topbar)) {
+        cJSON_Delete(root);
+        free(settings);
+        return send_json_error(req, "400 Bad Request", "topbar must be an object");
     }
 
     bool invalid_type = false;
@@ -775,6 +790,14 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
     if (cJSON_IsObject(audio)) {
         (void)update_int_setting(audio, "volume", &settings->audio_volume, 0, 100, &invalid_type);
     }
+    if (cJSON_IsObject(topbar)) {
+        (void)update_bool_setting(topbar, "show_clock", &settings->topbar_show_clock, &invalid_type);
+        (void)update_bool_setting(topbar, "show_room_name", &settings->topbar_show_room_name, &invalid_type);
+        (void)update_string_setting(
+            topbar, "room_name", settings->topbar_room_name, sizeof(settings->topbar_room_name), &invalid_type, &too_long);
+        (void)update_bool_setting(topbar, "show_status", &settings->topbar_show_status, &invalid_type);
+        (void)update_bool_setting(topbar, "show_brightness", &settings->topbar_show_brightness, &invalid_type);
+    }
     if (cJSON_IsObject(display)) {
         /* The display power policy lives in its own NVS (display driver), so it
          * is applied immediately here and does not need the settings struct. */
@@ -874,7 +897,7 @@ esp_err_t api_settings_put_handler(httpd_req_t *req)
         return send_json_error(
             req,
             "400 Bad Request",
-            "One or more settings values are too long (ssid<=32, wifi_password<=64, country_code<=2, bssid<=17, ws_url<=255, token<=511, ntp<=127, timezone<=127, language<=15)");
+            "One or more settings values are too long (ssid<=32, wifi_password<=64, country_code<=2, bssid<=17, ws_url<=255, token<=511, ntp<=127, timezone<=127, language<=15, room_name<=31)");
     }
     if (!has_ws_scheme(settings->ha_ws_url)) {
         free(settings);

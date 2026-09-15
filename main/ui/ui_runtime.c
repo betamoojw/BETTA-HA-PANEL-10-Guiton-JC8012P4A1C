@@ -21,6 +21,7 @@
 #include "ha/ha_model.h"
 #include "layout/layout_store.h"
 #include "net/wifi_mgr.h"
+#include "settings/runtime_settings.h"
 #include "ui/fonts/mdi_font_registry.h"
 #if CONFIG_APP_FEATURE_CAMERAS
 #include "ui/ui_cameras_page.h"
@@ -116,6 +117,7 @@ typedef struct {
     bool wifi_setup_ap_active;
     bool ha_connected;
     bool ha_initial_sync_done;
+    int brightness_percent;
 } ui_topbar_cache_t;
 static ui_topbar_cache_t s_topbar_cache = {0};
 #if APP_UI_TEST_WEATHER_ICON_OVERLAY
@@ -366,11 +368,17 @@ static void ui_runtime_refresh_topbar(void)
                           ha_connected != s_topbar_cache.ha_connected ||
                           ha_initial_sync_done != s_topbar_cache.ha_initial_sync_done;
 
+    int brightness_percent = display_get_brightness_percent();
+    bool brightness_changed = !s_topbar_cache.valid || brightness_percent != s_topbar_cache.brightness_percent;
+
     if (datetime_changed) {
         ui_pages_set_topbar_datetime(&info);
     }
     if (status_changed) {
         ui_pages_set_topbar_status(wifi_connected, wifi_setup_ap_active, ha_connected, ha_initial_sync_done);
+    }
+    if (brightness_changed) {
+        ui_pages_set_topbar_brightness(brightness_percent);
     }
 
     s_topbar_cache.valid = true;
@@ -383,6 +391,7 @@ static void ui_runtime_refresh_topbar(void)
     s_topbar_cache.wifi_setup_ap_active = wifi_setup_ap_active;
     s_topbar_cache.ha_connected = ha_connected;
     s_topbar_cache.ha_initial_sync_done = ha_initial_sync_done;
+    s_topbar_cache.brightness_percent = brightness_percent;
 }
 
 static void ui_runtime_show_weather_icon_overlay(void)
@@ -1171,6 +1180,20 @@ esp_err_t ui_runtime_init(void)
         return ESP_ERR_TIMEOUT;
     }
     s_topbar_cache.valid = false;
+
+    runtime_settings_t runtime_settings;
+    if (runtime_settings_load(&runtime_settings) != ESP_OK) {
+        runtime_settings_set_defaults(&runtime_settings);
+    }
+    ui_topbar_config_t topbar_cfg = {
+        .show_clock = runtime_settings.topbar_show_clock,
+        .show_room_name = runtime_settings.topbar_show_room_name,
+        .show_status = runtime_settings.topbar_show_status,
+        .show_brightness = runtime_settings.topbar_show_brightness,
+    };
+    strlcpy(topbar_cfg.room_name, runtime_settings.topbar_room_name, sizeof(topbar_cfg.room_name));
+    ui_pages_set_topbar_config(&topbar_cfg);
+
     theme_default_init();
     ui_pages_init();
     ui_pages_set_show_callback(ui_runtime_on_page_shown);

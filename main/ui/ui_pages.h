@@ -7,12 +7,22 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "app_config.h"
 #include "lvgl.h"
 
 typedef void (*ui_pages_show_cb_t)(const char *page_id, uint16_t index);
 /* Simple notification callback (no payload), e.g. topbar gear press or a
  * finished page rebuild. Runs on the LVGL UI task. */
 typedef void (*ui_pages_action_cb_t)(void);
+
+/* Runtime configuration for the top bar (editable via the web editor). */
+typedef struct {
+    bool show_clock;
+    bool show_room_name;
+    char room_name[APP_TOP_BAR_ROOM_NAME_MAX_LEN];
+    bool show_status;
+    bool show_brightness;
+} ui_topbar_config_t;
 
 void ui_pages_init(void);
 void ui_pages_reset(void);
@@ -37,3 +47,8 @@ uint16_t ui_pages_count(void);
 void ui_pages_set_topbar_status(
     bool wifi_connected, bool wifi_setup_ap_active, bool api_connected, bool api_initial_sync_done);
 void ui_pages_set_topbar_datetime(const struct tm *timeinfo);
+/* Configure which top bar elements are shown. Must be called before
+ * ui_pages_init() so the top bar is built with the right layout. */
+void ui_pages_set_topbar_config(const ui_topbar_config_t *cfg);
+/* Update the brightness chip label (percent value). Safe to call every second. */
+void ui_pages_set_topbar_brightness(int percent);

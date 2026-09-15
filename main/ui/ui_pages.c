@@ -51,6 +51,15 @@ static lv_obj_t *s_wifi_icon = NULL;
 static lv_obj_t *s_api_icon = NULL;
 static lv_obj_t *s_settings_btn = NULL;
 static lv_obj_t *s_settings_btn_label = NULL;
+static lv_obj_t *s_room_name_label = NULL;
+static lv_obj_t *s_brightness_icon = NULL;
+static ui_topbar_config_t s_topbar_cfg = {
+    .show_clock = true,
+    .show_room_name = false,
+    .room_name = "",
+    .show_status = true,
+    .show_brightness = true,
+};
 static lv_obj_t *s_nav_bar = NULL;
 static lv_obj_t *s_nav_home_button = NULL;
 static lv_obj_t *s_nav_home_label = NULL;
@@ -408,35 +417,61 @@ static void ui_pages_create_topbar(lv_obj_t *screen)
     lv_obj_set_style_border_opa(s_topbar, LV_OPA_70, LV_PART_MAIN);
     lv_obj_set_style_pad_all(s_topbar, 0, LV_PART_MAIN);
 
-    s_date_label = lv_label_create(s_topbar);
-    lv_obj_set_width(s_date_label, 220);
-    lv_obj_align(s_date_label, LV_ALIGN_LEFT_MID, 16, 0);
-    lv_obj_set_style_text_color(s_date_label, lv_color_hex(APP_UI_COLOR_TOPBAR_MUTED), LV_PART_MAIN);
-    lv_obj_set_style_text_font(s_date_label, TOPBAR_DATE_FONT, LV_PART_MAIN);
-    lv_obj_set_style_text_align(s_date_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-    lv_label_set_text(s_date_label, "--.--.----");
+    const bool show_room = s_topbar_cfg.show_room_name && s_topbar_cfg.room_name[0] != '\0';
+    const lv_coord_t date_x = show_room ? 186 : 16;
 
-    s_time_label = lv_label_create(s_topbar);
-    lv_obj_set_width(s_time_label, 220);
-    lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_text_color(s_time_label, lv_color_hex(APP_UI_COLOR_TOPBAR_TEXT), LV_PART_MAIN);
-    lv_obj_set_style_text_font(s_time_label, TOPBAR_TIME_FONT, LV_PART_MAIN);
-    lv_obj_set_style_text_align(s_time_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_label_set_text(s_time_label, "--:--");
+    if (show_room) {
+        s_room_name_label = lv_label_create(s_topbar);
+        lv_obj_set_width(s_room_name_label, 160);
+        lv_obj_align(s_room_name_label, LV_ALIGN_LEFT_MID, 16, 0);
+        lv_obj_set_style_text_color(s_room_name_label, lv_color_hex(APP_UI_COLOR_TOPBAR_TEXT), LV_PART_MAIN);
+        lv_obj_set_style_text_font(s_room_name_label, TOPBAR_DATE_FONT, LV_PART_MAIN);
+        lv_obj_set_style_text_align(s_room_name_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+        lv_label_set_long_mode(s_room_name_label, LV_LABEL_LONG_DOT);
+        lv_label_set_text(s_room_name_label, s_topbar_cfg.room_name);
+    }
 
-    s_api_icon = lv_label_create(s_topbar);
-    lv_obj_set_width(s_api_icon, 86);
-    lv_obj_align(s_api_icon, LV_ALIGN_RIGHT_MID, -158, 0);
-    ui_pages_style_topbar_chip(s_api_icon);
-    char api_text[32] = {0};
-    snprintf(api_text, sizeof(api_text), "%s %s", ui_i18n_get("topbar.ha", "HA"), LV_SYMBOL_CLOSE);
-    lv_label_set_text(s_api_icon, api_text);
+    if (s_topbar_cfg.show_clock) {
+        s_date_label = lv_label_create(s_topbar);
+        lv_obj_set_width(s_date_label, 220);
+        lv_obj_align(s_date_label, LV_ALIGN_LEFT_MID, date_x, 0);
+        lv_obj_set_style_text_color(s_date_label, lv_color_hex(APP_UI_COLOR_TOPBAR_MUTED), LV_PART_MAIN);
+        lv_obj_set_style_text_font(s_date_label, TOPBAR_DATE_FONT, LV_PART_MAIN);
+        lv_obj_set_style_text_align(s_date_label, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+        lv_label_set_text(s_date_label, "--.--.----");
 
-    s_wifi_icon = lv_label_create(s_topbar);
-    lv_obj_set_width(s_wifi_icon, 96);
-    lv_obj_align(s_wifi_icon, LV_ALIGN_RIGHT_MID, -56, 0);
-    ui_pages_style_topbar_chip(s_wifi_icon);
-    lv_label_set_text(s_wifi_icon, LV_SYMBOL_CLOSE);
+        s_time_label = lv_label_create(s_topbar);
+        lv_obj_set_width(s_time_label, 220);
+        lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_color(s_time_label, lv_color_hex(APP_UI_COLOR_TOPBAR_TEXT), LV_PART_MAIN);
+        lv_obj_set_style_text_font(s_time_label, TOPBAR_TIME_FONT, LV_PART_MAIN);
+        lv_obj_set_style_text_align(s_time_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_label_set_text(s_time_label, "--:--");
+    }
+
+    if (s_topbar_cfg.show_status) {
+        s_api_icon = lv_label_create(s_topbar);
+        lv_obj_set_width(s_api_icon, 86);
+        lv_obj_align(s_api_icon, LV_ALIGN_RIGHT_MID, -158, 0);
+        ui_pages_style_topbar_chip(s_api_icon);
+        char api_text[32] = {0};
+        snprintf(api_text, sizeof(api_text), "%s %s", ui_i18n_get("topbar.ha", "HA"), LV_SYMBOL_CLOSE);
+        lv_label_set_text(s_api_icon, api_text);
+
+        s_wifi_icon = lv_label_create(s_topbar);
+        lv_obj_set_width(s_wifi_icon, 96);
+        lv_obj_align(s_wifi_icon, LV_ALIGN_RIGHT_MID, -56, 0);
+        ui_pages_style_topbar_chip(s_wifi_icon);
+        lv_label_set_text(s_wifi_icon, LV_SYMBOL_CLOSE);
+    }
+
+    if (s_topbar_cfg.show_brightness) {
+        s_brightness_icon = lv_label_create(s_topbar);
+        lv_obj_set_width(s_brightness_icon, 86);
+        lv_obj_align(s_brightness_icon, LV_ALIGN_RIGHT_MID, s_topbar_cfg.show_status ? -250 : -56, 0);
+        ui_pages_style_topbar_chip(s_brightness_icon);
+        lv_label_set_text(s_brightness_icon, LV_SYMBOL_CHARGE);
+    }
 
     ui_pages_create_topbar_gear(s_topbar);
 }
@@ -508,6 +543,8 @@ void ui_pages_init(void)
     s_api_icon = NULL;
     s_settings_btn = NULL;
     s_settings_btn_label = NULL;
+    s_room_name_label = NULL;
+    s_brightness_icon = NULL;
     s_nav_bar = NULL;
     s_nav_home_button = NULL;
     s_nav_home_label = NULL;
@@ -769,6 +806,34 @@ const char *ui_pages_current_id(void)
 uint16_t ui_pages_count(void)
 {
     return s_page_count;
+}
+
+void ui_pages_set_topbar_config(const ui_topbar_config_t *cfg)
+{
+    if (cfg == NULL) {
+        return;
+    }
+    s_topbar_cfg.show_clock = cfg->show_clock;
+    s_topbar_cfg.show_room_name = cfg->show_room_name;
+    strlcpy(s_topbar_cfg.room_name, cfg->room_name, sizeof(s_topbar_cfg.room_name));
+    s_topbar_cfg.show_status = cfg->show_status;
+    s_topbar_cfg.show_brightness = cfg->show_brightness;
+}
+
+void ui_pages_set_topbar_brightness(int percent)
+{
+    if (s_brightness_icon == NULL) {
+        return;
+    }
+    if (percent < 0) {
+        percent = 0;
+    }
+    if (percent > 100) {
+        percent = 100;
+    }
+    char text[16] = {0};
+    snprintf(text, sizeof(text), "%s %d%%", LV_SYMBOL_CHARGE, percent);
+    lv_label_set_text(s_brightness_icon, text);
 }
 
 void ui_pages_set_topbar_status(

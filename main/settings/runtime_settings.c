@@ -145,8 +145,10 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
     cJSON *camera_image = cJSON_CreateObject();
     cJSON *system = cJSON_CreateObject();
     cJSON *audio = cJSON_CreateObject();
+    cJSON *topbar = cJSON_CreateObject();
     if (root == NULL || wifi == NULL || ha == NULL || time_cfg == NULL || ui == NULL || xiaozhi == NULL ||
-        sd == NULL || network == NULL || camera == NULL || camera_image == NULL || system == NULL || audio == NULL) {
+        sd == NULL || network == NULL || camera == NULL || camera_image == NULL || system == NULL || audio == NULL ||
+        topbar == NULL) {
         cJSON_Delete(root);
         cJSON_Delete(wifi);
         cJSON_Delete(ha);
@@ -159,6 +161,7 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
         cJSON_Delete(camera_image);
         cJSON_Delete(system);
         cJSON_Delete(audio);
+        cJSON_Delete(topbar);
         return ESP_ERR_NO_MEM;
     }
 
@@ -261,6 +264,13 @@ static esp_err_t write_public_settings_file(const runtime_settings_t *settings)
     cJSON_AddNumberToObject(audio, "volume", settings->audio_volume);
     cJSON_AddItemToObject(root, "audio", audio);
 
+    cJSON_AddBoolToObject(topbar, "show_clock", settings->topbar_show_clock);
+    cJSON_AddBoolToObject(topbar, "show_room_name", settings->topbar_show_room_name);
+    cJSON_AddStringToObject(topbar, "room_name", settings->topbar_room_name);
+    cJSON_AddBoolToObject(topbar, "show_status", settings->topbar_show_status);
+    cJSON_AddBoolToObject(topbar, "show_brightness", settings->topbar_show_brightness);
+    cJSON_AddItemToObject(root, "topbar", topbar);
+
     char *payload = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (payload == NULL) {
@@ -318,6 +328,7 @@ static esp_err_t parse_settings_json(
     cJSON *camera = cJSON_GetObjectItemCaseSensitive(root, "camera");
     cJSON *system = cJSON_GetObjectItemCaseSensitive(root, "system");
     cJSON *audio = cJSON_GetObjectItemCaseSensitive(root, "audio");
+    cJSON *topbar = cJSON_GetObjectItemCaseSensitive(root, "topbar");
 
     if (cJSON_IsObject(wifi)) {
         json_copy_string(wifi, "ssid", out->wifi_ssid, sizeof(out->wifi_ssid));
@@ -497,6 +508,14 @@ static esp_err_t parse_settings_json(
 
     if (cJSON_IsObject(audio)) {
         json_copy_int(audio, "volume", &out->audio_volume, 0, 100);
+    }
+
+    if (cJSON_IsObject(topbar)) {
+        json_copy_bool(topbar, "show_clock", &out->topbar_show_clock);
+        json_copy_bool(topbar, "show_room_name", &out->topbar_show_room_name);
+        json_copy_string(topbar, "room_name", out->topbar_room_name, sizeof(out->topbar_room_name));
+        json_copy_bool(topbar, "show_status", &out->topbar_show_status);
+        json_copy_bool(topbar, "show_brightness", &out->topbar_show_brightness);
     }
 
     cJSON_Delete(root);
@@ -745,6 +764,12 @@ void runtime_settings_set_defaults(runtime_settings_t *out)
     out->daily_restart_hour = -1;
     out->touch_test = false;
     out->audio_volume = 80;
+
+    out->topbar_show_clock = true;
+    out->topbar_show_room_name = false;
+    out->topbar_room_name[0] = '\0';
+    out->topbar_show_status = true;
+    out->topbar_show_brightness = true;
 }
 
 esp_err_t runtime_settings_load(runtime_settings_t *out)

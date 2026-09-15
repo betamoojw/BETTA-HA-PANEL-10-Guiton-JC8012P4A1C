@@ -91,6 +91,13 @@ typedef struct {
 
     /* Audio. */
     int audio_volume; /* 0..100 */
+
+    /* Top bar (configurable via the web editor). */
+    bool topbar_show_clock;
+    bool topbar_show_room_name;
+    char topbar_room_name[APP_TOP_BAR_ROOM_NAME_MAX_LEN];
+    bool topbar_show_status;
+    bool topbar_show_brightness;
 } runtime_settings_t;
 
 void runtime_settings_set_defaults(runtime_settings_t *out);
