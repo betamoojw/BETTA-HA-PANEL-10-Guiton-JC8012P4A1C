@@ -66,6 +66,7 @@ płytki JC8012P4A1C-I-W-Y.
 - **IP cameras** — up to 4 Home Assistant `camera.*` entities or HTTP snapshot URLs.
 - **Xiaozhi AI** — built-in voice assistant (off by default; enable in Settings → Xiaozhi AI + cloud pairing).
 - **Tile styling** — per-tile font size and scale, tile display styles (gauge/bars/arc, graphic ring), theme colours, UI scale and font settings.
+- **Configurable top bar** — show/hide clock & date, room name, Wi-Fi/HA status and brightness level; edited live from the editor (Settings → Top bar).
 - **Energy dashboard** — automatic grid / solar / battery / gas / water flow from the Home Assistant energy model.
 - **Graphs** — line, smoothed line, bar charts; event-rate sampling up to 4096 points with progressive decimation.
 - **Graphical screensaver** — full-screen wallpaper (SD card) + optional clock, dim-after-idle, night mode, per-state brightness sliders.
@@ -84,6 +85,7 @@ płytki JC8012P4A1C-I-W-Y.
 - **Kamery IP** — do 4 encji Home Assistant `camera.*` lub adresów URL zdjęć HTTP.
 - **Xiaozhi AI** — wbudowany asystent głosowy (domyślnie wyłączony; włącz w Ustawienia → Xiaozhi AI + parowanie z chmurą).
 - **Stylizacja kafelków** — rozmiar i skalowanie czcionki per kafelek, style wyświetlania (wskaźnik/paski/łuk, pierścień graficzny), kolory motywu, skalowanie UI i ustawienia czcionek.
+- **Konfigurowalny górny pasek** — pokaż/ukryj zegar i datę, nazwę pokoju, status Wi-Fi/HA i poziom jasności; edytowany na żywo z edytora (Ustawienia → Górny pasek).
 - **Panel energii** — automatyczna wizualizacja sieć / słońce / bateria / gaz / woda.
 - **Wykresy** — liniowe, wygładzone, słupkowe; próbkowanie do 4096 punktów z decymacją.
 - **Wygaszacz graficzny** — tapeta (karta SD) + opcjonalny zegar, przyciemnianie po bezczynności, tryb nocny, osobne suwaki jasności.
